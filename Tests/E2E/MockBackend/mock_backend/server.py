@@ -5,6 +5,7 @@ import threading
 import time
 
 from .streaming import Stream
+from .queue_fixture import queue_request, steer_request
 from .transport import ProtocolError
 
 
@@ -160,7 +161,11 @@ class Server:
                     turns = []
             return {'thread': {**self.summary(thread), 'turns': turns}, **self.settings(thread)}
         if method == 'thread/queue/list' and self.scenario.get('desktopHistory'):
+            if self.scenario.get('desktopQueue'):
+                return queue_request(self, method, p)
             return {'data': [], 'nextCursor': None}
+        if method.startswith('thread/queue/') and self.scenario.get('desktopQueue'):
+            return queue_request(self, method, p)
         if method in ('thread/turns/list', 'thread/items/list'):
             thread = self.thread(p.get('threadId'))
             if method == 'thread/turns/list':
@@ -185,6 +190,8 @@ class Server:
             return {}
         if method == 'turn/start':
             return self.start(p)
+        if method == 'turn/steer' and self.scenario.get('desktopQueue'):
+            return steer_request(self, p)
         if method == 'turn/interrupt':
             stream = self.active.get(p.get('threadId'))
             if not stream or stream.turn['id'] != p.get('turnId'):
@@ -270,7 +277,7 @@ class Server:
             raise ProtocolError(self.scenario['error']['code'], self.scenario['error']['message'])
         turn_id = self.state.identity('turn')
         user = {'id': self.state.identity('user'), 'type': 'userMessage', 'content': inputs}
-        if self.scenario.get('desktopTurn'):
+        if self.scenario.get('desktopTurn') or self.scenario.get('desktopQueue'):
             user['clientId'] = p.get('clientUserMessageId')
             if inputs[0]['text'] == 'Recover this fixture receipt':
                 thread['turns'].append({'id': turn_id, 'status': 'completed', 'items': [user]})

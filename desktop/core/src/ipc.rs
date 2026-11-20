@@ -10,6 +10,7 @@ mod actions;
 mod git;
 mod navigation;
 mod question_reply;
+mod queue;
 mod stream;
 mod subscription;
 pub use actions::{
@@ -24,6 +25,9 @@ pub use navigation::{
     LoginTicket, NavigationIntent, NavigationView, QuitDecision, QuitView, WriteAccess,
 };
 pub use question_reply::present_question_reply;
+pub use queue::{
+    QueueCommand, QueueEditView, QueueEntryView, QueueRequest, QueueSteerTarget, QueueView,
+};
 pub use stream::{
     StreamChange, TextBatch, TextBatcher, TranscriptItem, TranscriptRole, TranscriptView,
 };
@@ -173,6 +177,12 @@ pub fn workspace_typescript() -> String {
         ChatRequest::decl(),
         DraftEdit::decl(),
         NavigationIntent::decl(),
+        QueueRequest::decl(),
+        QueueCommand::decl(),
+        QueueSteerTarget::decl(),
+        QueueView::decl(),
+        QueueEntryView::decl(),
+        QueueEditView::decl(),
         RevisionedNavigation::decl(),
         AccountView::decl(),
         AccountModel::decl(),

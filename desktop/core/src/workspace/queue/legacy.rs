@@ -1,10 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
-use super::{QueueError, WorkspaceEngine};
+use super::{QueueEditResult, QueueError, WorkspaceEngine, edited_input};
 use crate::{
-    codex::{AppServerClient, ChatRead, QueueSnapshot, RequestError},
+    checkout::CheckoutIdentity,
+    codex::{AppServerClient, ChatRead, QueueSnapshot, QueuedSubmission, RequestError},
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
-    storage::attachments::{AttachmentStore, JournalEntry, JournalKind, JournalOutcome},
+    storage::attachments::{
+        AttachmentStore, JournalEntry, JournalKind, JournalOutcome, LegacyQueueStatus,
+        queue_edits::{QueueEdit, QueueEditError, QueueEditOutcome},
+    },
     workspace::{
         ExecutionTarget, SendIntent, SubmissionError, WorkspaceError, submission::turn_request,
     },
@@ -18,6 +22,117 @@ pub enum LegacyStartResult {
 }
 
 impl WorkspaceEngine {
+    pub async fn edit_local_follow_up(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        thread: &ThreadId,
+        evidence: &ChatRead<QueueSnapshot>,
+        id: RequestId,
+    ) -> Result<(), QueueError> {
+        let _queue = self.lock_queue(thread).await;
+        let _commit = self.preparation_commit.lock().await;
+        let checkout = self.legacy_owner(client, thread, evidence)?;
+        let entry = local_entry(store, &checkout, thread, client.identity(), id)?
+            .ok_or(QueueError::Changed)?;
+        store.begin_queue_edit(&checkout, thread, entry)?;
+        Ok(())
+    }
+
+    pub async fn cancel_local_follow_up_edit(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        edit: &QueueEdit,
+        evidence: &ChatRead<QueueSnapshot>,
+    ) -> Result<(), QueueError> {
+        let thread = &edit.thread;
+        let _queue = self.lock_queue(thread).await;
+        let _commit = self.preparation_commit.lock().await;
+        let checkout = self.legacy_owner(client, thread, evidence)?;
+        let id = local_edit_id(edit)?;
+        let outcome = if local_entry(store, &checkout, thread, client.identity(), id)?.is_some() {
+            QueueEditOutcome::Discard
+        } else {
+            QueueEditOutcome::Detach
+        };
+        Ok(store.finish_queue_edit(&checkout, edit, outcome)?)
+    }
+
+    pub async fn save_local_follow_up_edit(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        edit: &QueueEdit,
+        evidence: &ChatRead<QueueSnapshot>,
+    ) -> Result<QueueEditResult, QueueError> {
+        let thread = &edit.thread;
+        let _queue = self.lock_queue(thread).await;
+        let _commit = self.preparation_commit.lock().await;
+        let checkout = self.legacy_owner(client, thread, evidence)?;
+        let id = local_edit_id(edit)?;
+        let Some(mut entry) = local_entry(store, &checkout, thread, client.identity(), id)? else {
+            store.finish_queue_edit(&checkout, edit, QueueEditOutcome::Detach)?;
+            return Ok(QueueEditResult::Detached);
+        };
+        if entry != edit.entry {
+            return Err(QueueError::Changed);
+        }
+        let draft = store.capture_queue_edit(&checkout, edit)?;
+        if draft.text.trim().is_empty() && draft.context.is_empty() {
+            return Err(QueueEditError::InvalidInput.into());
+        }
+        entry.input = edited_input(&entry, &draft);
+        store.finish_queue_edit(
+            &checkout,
+            edit,
+            QueueEditOutcome::Updated {
+                entry,
+                revision: draft.revision,
+                legacy: true,
+            },
+        )?;
+        Ok(QueueEditResult::Updated)
+    }
+
+    pub async fn delete_local_follow_up(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        thread: &ThreadId,
+        evidence: &ChatRead<QueueSnapshot>,
+        id: RequestId,
+    ) -> Result<(), QueueError> {
+        let _queue = self.lock_queue(thread).await;
+        let _commit = self.preparation_commit.lock().await;
+        let checkout = self.legacy_owner(client, thread, evidence)?;
+        Ok(store.delete_local_follow_up(&checkout, thread, id)?)
+    }
+
+    pub async fn reorder_local_follow_ups(
+        &self,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        thread: &ThreadId,
+        evidence: &ChatRead<QueueSnapshot>,
+        order: &[RequestId],
+    ) -> Result<(), QueueError> {
+        let _queue = self.lock_queue(thread).await;
+        let _commit = self.preparation_commit.lock().await;
+        let checkout = self.legacy_owner(client, thread, evidence)?;
+        Ok(store.reorder_local_follow_ups(&checkout, thread, order)?)
+    }
+
+    fn legacy_owner(
+        &self,
+        client: &AppServerClient,
+        thread: &ThreadId,
+        evidence: &ChatRead<QueueSnapshot>,
+    ) -> Result<CheckoutIdentity, QueueError> {
+        require_legacy_queue(client.identity(), thread, evidence)?;
+        self.queue_owner(client.identity(), thread)
+    }
+
     pub async fn enqueue_legacy_follow_up(
         &self,
         client: &AppServerClient,
@@ -143,4 +258,31 @@ pub(super) fn require_legacy_queue(
         QueueSnapshot::Unsupported => Ok(()),
         QueueSnapshot::Available(_) => Err(QueueError::ServerQueueAvailable),
     }
+}
+
+fn local_edit_id(edit: &QueueEdit) -> Result<RequestId, QueueError> {
+    uuid::Uuid::parse_str(&edit.entry.id)
+        .map(RequestId)
+        .map_err(|_| QueueError::Changed)
+}
+
+fn local_entry(
+    store: &AttachmentStore,
+    checkout: &CheckoutIdentity,
+    thread: &ThreadId,
+    owner: &ConnectionIdentity,
+    id: RequestId,
+) -> Result<Option<QueuedSubmission>, QueueError> {
+    Ok(store
+        .legacy_queue(checkout, thread, owner)?
+        .into_iter()
+        .find(|entry| entry.id == id && entry.status != LegacyQueueStatus::AwaitingEvidence)
+        .map(|entry| {
+            let id = entry.id.0.to_string();
+            QueuedSubmission {
+                id: id.clone(),
+                client_user_message_id: id,
+                input: entry.input,
+            }
+        }))
 }

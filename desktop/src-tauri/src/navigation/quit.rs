@@ -33,6 +33,7 @@ impl Navigation {
             return;
         }
         let confirm = !self.inflight.is_empty()
+            || self.queues.has_mutations()
             || self
                 .backend
                 .as_ref()
@@ -139,6 +140,7 @@ impl Navigation {
         }
         if Instant::now() < drain.deadline
             && (!self.inflight.is_empty()
+                || self.queues.has_mutations()
                 || execution
                     .as_ref()
                     .is_some_and(|state| has_work(&state.execution)))

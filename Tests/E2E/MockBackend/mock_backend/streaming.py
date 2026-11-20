@@ -27,7 +27,7 @@ class Stream:
             if engine.scenario.get('codingProbe'):
                 self.read_probe_marker()
             desktop_turn = engine.scenario.get('desktopTurn')
-            hold = desktop_turn and self.turn['items'][0]['content'][0]['text'] == 'Hold this fixture turn'
+            hold = (desktop_turn or engine.scenario.get('desktopQueue')) and self.turn['items'][0]['content'][0]['text'] == 'Hold this fixture turn'
             if hold and engine.scenario.get('desktopQuit'):
                 with engine.lock:
                     command = {'id': 'fixture-pending-command', 'type': 'commandExecution',

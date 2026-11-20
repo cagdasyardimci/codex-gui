@@ -29,6 +29,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::migrate_queue_deletions,
     attachments::legacy_queue::migrate,
     attachments::queue_steering::migrate,
+    attachments::queue_preferences::migrate,
 ];
 
 #[derive(Debug, Error)]

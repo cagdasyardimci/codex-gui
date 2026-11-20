@@ -40,6 +40,7 @@ pub struct SendRequest {
     pub chat_id: Option<String>,
     pub draft_id: String,
     pub text: String,
+    pub expected_turn: Option<String>,
 }
 
 #[derive(Debug, Deserialize, TS)]

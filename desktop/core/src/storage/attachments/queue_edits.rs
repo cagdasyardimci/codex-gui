@@ -86,14 +86,18 @@ impl AttachmentStore {
                 "INSERT INTO draft_attachments (draft_id, blob_id)
                  SELECT ?1, a.blob_id FROM submission_attachments AS a
                  JOIN submissions AS s ON s.id = a.submission_id
-                 JOIN queue_receipts AS q ON q.id = s.id
-                 WHERE s.id = ?2 AND s.checkout_key = ?3 AND s.thread_id = ?4 AND q.queued_id = ?5",
+                 LEFT JOIN queue_receipts AS q ON q.id = s.id
+                 LEFT JOIN legacy_queue AS l ON l.id = s.id
+                 WHERE s.id = ?2 AND s.checkout_key = ?3 AND s.thread_id = ?4
+                    AND ((q.queued_id = ?5 AND NOT q.deleted)
+                         OR (l.id IS NOT NULL AND s.phase = 'reserved' AND ?5 = ?6))",
                 params![
                     id,
                     request.as_bytes().as_slice(),
                     checkout.storage_key(),
                     thread.0,
-                    entry.id
+                    entry.id,
+                    entry.client_user_message_id
                 ],
             )?;
         }
@@ -156,7 +160,25 @@ impl AttachmentStore {
                 let draft = read_draft(&tx, saved.draft)?.ok_or(AttachmentError::MissingDraft)?;
                 Some(draft.revision)
             }
-            QueueEditOutcome::Updated { entry, revision } => {
+            QueueEditOutcome::Updated {
+                entry,
+                revision,
+                legacy,
+            } => {
+                if legacy {
+                    let id = Uuid::parse_str(&entry.client_user_message_id)
+                        .map_err(|_| QueueEditError::Changed)?;
+                    let updated = tx.execute(
+                        "UPDATE submissions SET request = json_replace(request, '$.input', json(?4))
+                         WHERE id = ?1 AND checkout_key = ?2 AND thread_id = ?3 AND phase = 'reserved'
+                           AND EXISTS (SELECT 1 FROM legacy_queue AS l WHERE l.id = ?1)",
+                        params![id.as_bytes().as_slice(), checkout.storage_key(), edit.thread.0,
+                                serde_json::to_string(&entry.input)?],
+                    )?;
+                    if updated != 1 {
+                        return Err(QueueEditError::Changed);
+                    }
+                }
                 let draft = read_draft(&tx, saved.draft)?.ok_or(AttachmentError::MissingDraft)?;
                 if draft.revision != revision {
                     tx.execute(
@@ -205,6 +227,7 @@ pub(crate) enum QueueEditOutcome {
     Updated {
         entry: QueuedSubmission,
         revision: DraftRevision,
+        legacy: bool,
     },
 }
 

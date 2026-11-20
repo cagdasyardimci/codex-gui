@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use super::{
-    ConversationActions, RecoverSendRequest, RespondRequest, SendRequest, StopRequest, WorkspaceId,
-    WorkspaceRequest,
+    ConversationActions, QueueRequest, QueueView, RecoverSendRequest, RespondRequest, SendRequest,
+    StopRequest, WorkspaceId, WorkspaceRequest,
 };
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -16,6 +16,7 @@ pub struct NavigationView {
     pub account: AccountView,
     pub write_access: WriteAccess,
     pub actions: ConversationActions,
+    pub queue: Option<QueueView>,
     pub quit: Option<QuitView>,
 }
 
@@ -118,6 +119,7 @@ pub enum NavigationIntent {
     SetupSandbox(WorkspaceRequest),
     Send(SendRequest),
     Stop(StopRequest),
+    Queue(QueueRequest),
     Respond(RespondRequest),
     RecoverSend(RecoverSendRequest),
     ConfirmQuit(QuitDecision),

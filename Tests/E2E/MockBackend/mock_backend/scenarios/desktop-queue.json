@@ -1,0 +1,5 @@
+{
+  "extends": "desktop-history",
+  "desktopQueue": "server",
+  "intervalSeconds": 0.05
+}

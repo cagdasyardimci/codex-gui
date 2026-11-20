@@ -45,6 +45,7 @@ pub struct SubmissionReply {
 enum SubmissionKind {
     Turn,
     Queue,
+    Steer(TurnId),
 }
 
 #[derive(Deserialize)]
@@ -112,6 +113,39 @@ impl WorkspaceEngine {
         store: &AttachmentStore,
         timeout: Duration,
     ) -> Result<SubmissionReply, SubmissionError> {
+        self.submit_follow_up(
+            intent,
+            target,
+            client,
+            store,
+            timeout,
+            SubmissionKind::Queue,
+        )
+        .await
+    }
+
+    pub async fn steer_follow_up(
+        &self,
+        intent: Arc<SendIntent>,
+        target: ExecutionTarget,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        timeout: Duration,
+    ) -> Result<SubmissionReply, SubmissionError> {
+        let kind = SubmissionKind::Steer(target.turn.clone());
+        self.submit_follow_up(intent, target, client, store, timeout, kind)
+            .await
+    }
+
+    async fn submit_follow_up(
+        &self,
+        intent: Arc<SendIntent>,
+        target: ExecutionTarget,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        timeout: Duration,
+        kind: SubmissionKind,
+    ) -> Result<SubmissionReply, SubmissionError> {
         let engine = self.clone();
         let client = client.clone();
         let store = store.clone();
@@ -120,7 +154,7 @@ impl WorkspaceEngine {
                 .reserve_submission(intent, target.thread, Some(target.turn))
                 .await?;
             engine
-                .finish_submission(prepared, SubmissionKind::Queue, &client, &store, timeout)
+                .finish_submission(prepared, kind, &client, &store, timeout)
                 .await
         })
         .await?
@@ -219,11 +253,14 @@ fn reply_outcome(
             (!entry.id.is_empty() && entry.client_user_message_id == request.0.to_string())
                 .then_some(JournalOutcome::Queued(entry.id))
         }
+        (SubmissionKind::Steer(turn), Ok(reply)) if reply["turnId"] == turn.0 => {
+            Some(JournalOutcome::Accepted(turn.clone()))
+        }
         (SubmissionKind::Turn, Err(RequestError::Remote(error))) => {
             Some(JournalOutcome::Rejected { code: error.code })
         }
         // Internal errors can follow a committed queue write.
-        (SubmissionKind::Queue, Err(RequestError::Remote(error)))
+        (SubmissionKind::Queue | SubmissionKind::Steer(_), Err(RequestError::Remote(error)))
             if matches!(error.code, -32602..=-32600) =>
         {
             Some(JournalOutcome::Rejected { code: error.code })
@@ -288,7 +325,7 @@ async fn dispatch(
         .canonical_path()
         .to_str()
         .ok_or(SubmissionError::NonUnicodePath)?;
-    let journaled = turn_request(intent, &prepared.thread, cwd)?;
+    let mut journaled = turn_request(intent, &prepared.thread, cwd)?;
     let (method, request, kind) = match kind {
         SubmissionKind::Turn => ("turn/start", journaled.clone(), JournalKind::Direct),
         SubmissionKind::Queue => (
@@ -300,6 +337,19 @@ async fn dispatch(
             }),
             JournalKind::ServerQueue,
         ),
+        SubmissionKind::Steer(turn) => {
+            journaled["expectedTurnId"] = json!(turn.0);
+            (
+                "turn/steer",
+                json!({
+                    "threadId":journaled["threadId"],
+                    "expectedTurnId":turn.0,
+                    "clientUserMessageId":journaled["clientUserMessageId"],
+                    "input":journaled["input"],
+                }),
+                JournalKind::Direct,
+            )
+        }
     };
 
     let id = intent.operation.request;

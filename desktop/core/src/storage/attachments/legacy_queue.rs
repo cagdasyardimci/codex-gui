@@ -33,7 +33,7 @@ const LEGACY_RECORDS: &str = "SELECT s.id, s.request, s.phase = 'dispatching',
      FROM legacy_queue AS l JOIN submissions AS s ON s.id = l.id
      WHERE s.checkout_key = ?1 AND s.thread_id = ?2 AND s.phase IN ('reserved', 'dispatching')
        AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS o WHERE o.id = s.id)
-     ORDER BY l.position";
+     ORDER BY COALESCE(l.sort_key, l.position)";
 
 fn record(row: &rusqlite::Row<'_>) -> rusqlite::Result<LegacyRecord> {
     let status = if row.get::<_, bool>(2)? {
@@ -51,6 +51,84 @@ fn record(row: &rusqlite::Row<'_>) -> rusqlite::Result<LegacyRecord> {
 }
 
 impl AttachmentStore {
+    pub(crate) fn delete_local_follow_up(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+        id: RequestId,
+    ) -> Result<(), JournalError> {
+        let mut state = self.inner.state();
+        let tx = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let scope = checkout.storage_key();
+        let key = id.0.as_bytes().as_slice();
+        let owned = tx.query_row(
+            "SELECT EXISTS (
+                 SELECT 1 FROM submissions AS s JOIN legacy_queue AS l ON l.id = s.id
+                 WHERE s.id = ?1 AND s.checkout_key = ?2 AND s.thread_id = ?3 AND s.phase = 'reserved'
+             )",
+            params![key, scope, thread.0], |row| row.get::<_, bool>(0),
+        )?;
+        if !owned {
+            return Err(JournalError::InvalidPhase);
+        }
+        let released = super::submissions::release_submission_attachments(&tx, key)?;
+        tx.execute("DELETE FROM submissions WHERE id = ?1", [key])?;
+        tx.execute(
+            "DELETE FROM queue_edits WHERE checkout_key = ?1 AND thread_id = ?2 AND client_id = ?3",
+            params![scope, thread.0, id.0.to_string()],
+        )?;
+        tx.commit()?;
+        state.candidates.extend(released);
+        Ok(())
+    }
+
+    pub(crate) fn reorder_local_follow_ups(
+        &self,
+        checkout: &CheckoutIdentity,
+        thread: &ThreadId,
+        order: &[RequestId],
+    ) -> Result<(), JournalError> {
+        let mut state = self.inner.state();
+        let tx = state
+            .database
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let current = {
+            let mut query = tx.prepare(
+                "SELECT s.id, COALESCE(l.sort_key, l.position), s.phase = 'reserved'
+                 FROM submissions AS s JOIN legacy_queue AS l ON l.id = s.id
+                 WHERE s.checkout_key = ?1 AND s.thread_id = ?2 AND s.phase IN ('reserved', 'dispatching')
+                   AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS o WHERE o.id = s.id)
+                 ORDER BY COALESCE(l.sort_key, l.position)",
+            )?;
+            query
+                .query_map(params![checkout.storage_key(), thread.0], |row| {
+                    Ok((
+                        RequestId(Uuid::from_bytes(row.get(0)?)),
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        if order.len() != current.len()
+            || current.iter().any(|row| !row.2)
+            || order.iter().copied().collect::<HashSet<_>>()
+                != current.iter().map(|row| row.0).collect()
+        {
+            return Err(JournalError::InvalidPhase);
+        }
+        for (id, (_, position, _)) in order.iter().zip(current) {
+            tx.execute(
+                "UPDATE legacy_queue SET sort_key = ?2 WHERE id = ?1",
+                params![id.0.as_bytes().as_slice(), position],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn legacy_queue(
         &self,
         checkout: &CheckoutIdentity,

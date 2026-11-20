@@ -37,11 +37,13 @@ use crate::{fixture::Verification, project_ipc::ProjectState};
 
 mod account;
 mod interactions;
+mod queue;
 mod quit;
 mod sandbox;
 mod send;
 use account::AccountFlow;
 use interactions::InteractionProjection;
+use queue::{QueueCompletion, Queues};
 use quit::Quit;
 use sandbox::SandboxSetup;
 use send::{InflightSend, SendCompletion};
@@ -68,6 +70,7 @@ enum Input {
     Command(Option<Message>),
     Backend(Option<ServerEvent>),
     SendCompleted(Option<Box<SendCompletion>>),
+    QueueCompleted(Option<Box<QueueCompletion>>),
     Flush,
 }
 
@@ -99,6 +102,8 @@ struct Navigation {
     sandbox_setup: Option<SandboxSetup>,
     send_completions: mpsc::Sender<Box<SendCompletion>>,
     inflight: HashMap<DraftId, InflightSend>,
+    queues: Queues,
+    queue_completions: mpsc::Sender<Box<QueueCompletion>>,
     interactions: InteractionProjection,
     view: NavigationView,
     editable: HashSet<DraftId>,
@@ -122,6 +127,7 @@ impl NavigationHandle {
         let saved = store.desktop_selection()?;
         let (sender, receiver) = mpsc::channel(32);
         let (send_completions, finished_sends) = mpsc::channel(32);
+        let (queue_completions, finished_queue_jobs) = mpsc::channel(32);
         let navigation = Navigation {
             store,
             source_draft: saved.source_draft,
@@ -135,6 +141,8 @@ impl NavigationHandle {
             sandbox_setup: None,
             send_completions,
             inflight: HashMap::new(),
+            queues: Queues::default(),
+            queue_completions,
             interactions: InteractionProjection::default(),
             view: NavigationView::default(),
             editable: HashSet::new(),
@@ -149,6 +157,7 @@ impl NavigationHandle {
             fixture_project,
             receiver,
             finished_sends,
+            finished_queue_jobs,
         ));
         Ok(Self(sender))
     }
@@ -182,6 +191,7 @@ impl Navigation {
         fixture_project: Option<PathBuf>,
         mut commands: mpsc::Receiver<Message>,
         mut finished_sends: mpsc::Receiver<Box<SendCompletion>>,
+        mut finished_queue_jobs: mpsc::Receiver<Box<QueueCompletion>>,
     ) {
         if let Err(error) = self.restore(saved, fixture_project).await {
             eprintln!("{error}");
@@ -195,6 +205,7 @@ impl Navigation {
                     _ = timer.tick() => Input::Flush,
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
+                    completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
                     event = backend.connection.next_event() => Input::Backend(event),
                 }
             } else {
@@ -202,6 +213,7 @@ impl Navigation {
                     _ = timer.tick(), if self.draining_quit() => Input::Flush,
                     request = commands.recv() => Input::Command(request),
                     completion = finished_sends.recv() => Input::SendCompleted(completion),
+                    completion = finished_queue_jobs.recv() => Input::QueueCompleted(completion),
                 }
             };
             match input {
@@ -212,6 +224,10 @@ impl Navigation {
                 Input::Command(None) => break,
                 Input::SendCompleted(Some(result)) => self.complete_send(*result),
                 Input::SendCompleted(None) => unreachable!("navigation owns the completion sender"),
+                Input::QueueCompleted(Some(result)) => self.complete_queue(*result),
+                Input::QueueCompleted(None) => {
+                    unreachable!("navigation owns the queue completion sender")
+                }
                 Input::Backend(Some(event)) => {
                     if let Err(error) = self.handle_backend(event).await {
                         eprintln!("{error}");
@@ -360,6 +376,7 @@ impl Navigation {
                 self.start_sandbox_setup().await?;
             }
             NavigationIntent::Send(request) => self.send_visible(request).await?,
+            NavigationIntent::Queue(request) => self.handle_queue(request)?,
             NavigationIntent::Stop(request) => {
                 self.require_request(WorkspaceRequest {
                     workspace_id: request.workspace_id,
@@ -472,6 +489,7 @@ impl Navigation {
         self.stream = TextBatcher::default();
         self.restored_active_items.clear();
         self.view.actions = Default::default();
+        self.view.queue = None;
         self.refresh_recovery_action();
         self.publish_history(TranscriptView::default());
         self.sync_actions();
@@ -512,6 +530,7 @@ impl Navigation {
 
     async fn disconnect(&mut self) {
         self.sandbox_setup = None;
+        self.queues = Queues::default();
         let had_write_access =
             std::mem::take(&mut self.view.write_access) != WriteAccess::Unavailable;
         if let Some(backend) = self.backend.take() {
@@ -671,9 +690,18 @@ impl Navigation {
                 .resume_thread(&mut backend.connection, &self.store, &thread, RPC_TIMEOUT)
                 .await?;
             self.view.retryable = matches!(resumed.mode, ResumedMode::ReadOnly);
+            if let ResumedMode::Writable { queue, .. } = resumed.mode {
+                match queue {
+                    Ok(queue) => self.queues.accept(thread.clone(), queue),
+                    Err(error) => eprintln!("{error}"),
+                }
+            }
             for event in resumed.events {
                 self.present_event(event);
             }
+        }
+        if self.view.write_access == WriteAccess::Ready && !self.queues.knows(&thread) {
+            self.refresh_queue(thread);
         }
         self.sync_actions();
         Ok(())
@@ -720,12 +748,25 @@ impl Navigation {
             if matches!(method.as_str(), "item/started" | "item/completed")
             && params["item"]["type"] == "userMessage"
             && params["item"]["clientId"].is_string());
+        let starting_thread = match &event {
+            ServerEvent::Notification { method, params } if method == "turn/started" => {
+                params["threadId"]
+                    .as_str()
+                    .map(|thread| ThreadId(thread.into()))
+            }
+            _ => None,
+        };
         if let Some(event) = backend
             .engine
             .route_session_event(&client, &self.store, event, RPC_TIMEOUT)
             .await?
         {
             self.present_event(event);
+        }
+        if let Some(thread) = starting_thread
+            && !self.queues.knows(&thread)
+        {
+            self.refresh_queue(thread);
         }
         if sent_message {
             if let Some(draft) = self.editor_id() {
@@ -738,6 +779,10 @@ impl Navigation {
     }
 
     fn present_event(&mut self, event: RoutedEvent) {
+        if let RoutedEvent::QueueChanged(thread) = &event {
+            self.refresh_queue(thread.clone());
+            return;
+        }
         let RoutedEvent::Conversation {
             thread,
             event: ServerEvent::Notification { method, params },
@@ -745,6 +790,9 @@ impl Navigation {
         else {
             return;
         };
+        if method == "turn/completed" && params["turn"]["status"] == "completed" {
+            self.advance_legacy_queue(thread.clone());
+        }
         let Some(selection) = self
             .selection
             .as_ref()

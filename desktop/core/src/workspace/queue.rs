@@ -309,6 +309,7 @@ impl WorkspaceEngine {
             QueueEditOutcome::Updated {
                 entry: updated,
                 revision: draft.revision,
+                legacy: false,
             },
         )
         .await?;

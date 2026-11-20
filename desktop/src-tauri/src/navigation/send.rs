@@ -32,6 +32,12 @@ impl Navigation {
         self.sync_actions();
         if !self.view.actions.send
             || self.view.selected_chat != request.chat_id
+            || request.expected_turn.as_ref()
+                != self
+                    .view
+                    .queue
+                    .as_ref()
+                    .and_then(|queue| queue.active_turn.as_ref())
             || self
                 .view
                 .draft
@@ -46,10 +52,11 @@ impl Navigation {
     async fn admit_send(&mut self, request: SendRequest) -> Result<(), Failure> {
         let draft_id = DraftId(Uuid::parse_str(&request.draft_id)?);
         let saved = self.store.read_editor_draft(draft_id)?;
-        if saved.text != request.text || saved.text.trim().is_empty() {
+        if saved.text != request.text || (saved.text.trim().is_empty() && saved.context.is_empty())
+        {
             return Err("the submitted text no longer matches the displayed draft".into());
         }
-        let backend = self.backend.as_mut().ok_or("Codex is disconnected")?;
+        let backend = self.backend.as_ref().ok_or("Codex is disconnected")?;
         let client = backend.connection.client();
         let engine = backend.engine.clone();
         let operation = OperationIdentity {
@@ -67,6 +74,15 @@ impl Navigation {
             },
             settings: SendSettings::default(),
         });
+        if let (Some(chat), Some(turn)) = (&request.chat_id, &request.expected_turn) {
+            return self.send_follow_up(
+                intent,
+                ExecutionTarget {
+                    thread: ThreadId(chat.clone()),
+                    turn: TurnId(turn.clone()),
+                },
+            );
+        }
         let prepared = match request.chat_id {
             Some(chat) => {
                 engine
@@ -77,7 +93,10 @@ impl Navigation {
                 engine
                     .apply(WorkspaceAction::AdmitFirstMessage(intent))
                     .await?;
-                let effect = backend
+                let effect = self
+                    .backend
+                    .as_mut()
+                    .expect("connected for thread preparation")
                     .effects
                     .recv()
                     .await
@@ -244,6 +263,10 @@ impl Navigation {
         self.view.actions.send = false;
         self.view.actions.stop = None;
         self.view.actions.interactions.clear();
+        self.view.queue = self.queue_view().unwrap_or_else(|error| {
+            eprintln!("{error}");
+            None
+        });
         let Some(backend) = &self.backend else {
             self.publish_navigation();
             return;
@@ -283,11 +306,17 @@ impl Navigation {
                 && !self.view.actions.recover
                 && selected.is_none_or(|thread| {
                     state.writable_threads.contains(thread)
-                        && !state
+                        && self
+                            .view
+                            .queue
+                            .as_ref()
+                            .is_none_or(|queue| !queue.busy && queue.editing.is_none())
+                        && (!state
                             .execution
                             .active_turns
                             .iter()
                             .any(|turn| &turn.thread == thread)
+                            || self.view.queue.is_some())
                 })
                 && !inflight
                     .clone()

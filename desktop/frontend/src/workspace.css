@@ -145,6 +145,48 @@ body {
   resize: vertical;
 }
 
+.workspace-queue {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin-block: 0.35rem;
+  max-height: 28vh;
+  overflow: auto;
+}
+
+.workspace-queue ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.queue-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.35rem 0;
+  border-block-end: 1px solid var(--workspace-divider);
+}
+
+.queue-input {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.queue-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.workspace-queue > button {
+  align-self: end;
+}
+
 .interaction-card {
   max-height: 35vh;
   overflow: auto;

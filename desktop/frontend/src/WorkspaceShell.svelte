@@ -1,19 +1,21 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import type { DraftEdit, InteractionAnswer, NavigationIntent, WorkspaceSnapshot } from './generated/workspace';
+  import type { DraftEdit, InteractionAnswer, NavigationIntent, QueueCommand, WorkspaceSnapshot } from './generated/workspace';
   import InteractionCard from './InteractionCard.svelte';
   import QuitDialog from './QuitDialog.svelte';
   import WorkspaceChanges from './WorkspaceChanges.svelte';
+  import QueuePanel from './QueuePanel.svelte';
   import { navigateWorkspace, observeWorkspace, pickWorkspace } from './projectIpc';
   import { verifyHistory } from './historyProbe';
   import { verifyAccount } from './accountProbe';
   import { verifyWindowsSetup } from './windowsSetupProbe';
   import { verifyTurn } from './turnProbe';
+  import { verifyQueue } from './queueProbe';
   import { verifyDiff } from './diffProbe';
   import { verifyQuit } from './quitProbe';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let draftId: string | undefined;
@@ -30,6 +32,7 @@
   const navigation = $derived(snapshot?.navigation);
   const stopTarget = $derived(navigation?.actions.stop);
   const quit = $derived(navigation?.quit);
+  const queue = $derived(navigation?.queue);
 
   function receive(current: WorkspaceSnapshot) {
     const previous = snapshot?.navigation.draft;
@@ -125,13 +128,22 @@
 
   async function sendDraft() {
     if (!workspace || !draftId || !navigation?.actions.send || !text.trim() || composing || actionPending) return;
-    const send = { workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text };
+    const send = {
+      workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, draftId, text,
+      expectedTurn: queue?.activeTurn ?? null,
+    };
     admittingDraft = true;
     try {
       await act(() => navigateWorkspace({ send }));
     } finally {
       admittingDraft = false;
     }
+  }
+
+  function queueCommand(command: QueueCommand) {
+    if (!workspace || !navigation?.selectedChat || !queue || queue.busy) return;
+    const request = { workspaceId: workspace.workspaceId, chatId: navigation.selectedChat, revision: queue.revision, command };
+    void act(() => navigateWorkspace({ queue: request }), typeof command === 'object' && 'edit' in command);
   }
 
   function stop() {
@@ -209,6 +221,7 @@
     if (verify === 'account') void verifyAccount(() => snapshot);
     else if (verify === 'windowsSetup') void verifyWindowsSetup(() => snapshot);
     else if (verify === 'turn' || verify === 'activeTurn') void verifyTurn(() => snapshot, verify);
+    else if (verify === 'queue') void verifyQueue(() => snapshot);
     else if (verify === 'diff') void verifyDiff(() => snapshot);
     else if (verify === 'quit') void verifyQuit(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
@@ -272,6 +285,10 @@
       {#each navigation?.actions.interactions ?? [] as interaction (interaction.id)}
         <InteractionCard {interaction} disabled={actionPending} respond={(answer) => respond(interaction.id, answer)} />
       {/each}
+      {#if queue}
+        <QueuePanel {queue} disabled={actionPending || queue.busy || !!quit}
+          draftOccupied={text !== '' || !!queue.editing} command={queueCommand} />
+      {/if}
       {#if navigation?.draft}
         <textarea class="workspace-composer" aria-label="Message" rows="4" bind:this={editor}
           readonly={admittingDraft || confirmingQuit || quit?.draining}
@@ -282,13 +299,33 @@
           }}
           oninput={(event) => acceptText(event.currentTarget.value, event instanceof InputEvent && event.isComposing)}></textarea>
         <div class="composer-actions">
+          {#if queue}
+            <button type="button" aria-pressed={queue.enabled}
+              disabled={actionPending || queue.busy} onclick={() => queueCommand({ enable: !queue.enabled })}>
+              Queue Follow-ups
+            </button>
+          {/if}
           {#if navigation.actions.recover}
             <button type="button" disabled={actionPending} onclick={recoverSend}>Recover Send</button>
           {/if}
           {#if stopTarget}
             <button type="button" disabled={actionPending} onclick={stop}>{stopLabel()}</button>
           {/if}
-          <button type="button" disabled={actionPending || !navigation.actions.send || !text.trim()} onclick={() => void sendDraft()}>Send</button>
+          {#if queue?.editing}
+            {@const edit = queue.editing}
+            <button type="button" disabled={actionPending || queue.busy}
+              onclick={() => queueCommand({ cancelEdit: edit.id })}>Cancel Edit</button>
+            <button type="button" disabled={actionPending || queue.busy || (!text.trim() && !edit.hasContext)}
+              onclick={() => queueCommand({ saveEdit: edit.id })}>Save Queue Edit</button>
+          {:else if queue?.resume && text === ''}
+            {@const id = queue.resume}
+            <button type="button" disabled={actionPending || queue.busy}
+              onclick={() => queueCommand({ resume: id })}>Resume</button>
+          {:else}
+            <button type="button" disabled={actionPending || !navigation.actions.send || !text.trim()} onclick={() => void sendDraft()}>
+              {queue?.activeTurn ? (queue.enabled ? 'Queue' : 'Steer') : 'Send'}
+            </button>
+          {/if}
         </div>
       {/if}
     </section>

@@ -303,7 +303,8 @@ impl AttachmentStore {
         let id = id.0.as_bytes().as_slice();
         let binding = transaction
             .query_row(
-                "SELECT s.draft_id, s.draft_revision, q.id IS NOT NULL, q.queued_id, l.id IS NOT NULL
+                "SELECT s.draft_id, s.draft_revision, q.id IS NOT NULL, q.queued_id, l.id IS NOT NULL,
+                    json_extract(s.request, '$.expectedTurnId')
                  FROM submissions AS s LEFT JOIN queue_receipts AS q ON q.id = s.id
                  LEFT JOIN legacy_queue AS l ON l.id = s.id
                  WHERE s.id = ?1 AND s.thread_id = ?2 AND s.phase = 'dispatching'
@@ -322,14 +323,21 @@ impl AttachmentStore {
                         row.get::<_, bool>(2)?,
                         row.get::<_, Option<String>>(3)?,
                         row.get::<_, bool>(4)?,
+                        row.get::<_, Option<String>>(5)?,
                     ))
                 },
             )
             .optional()?;
-        let Some((draft_id, revision, queue_add, queued_id, legacy)) = binding else {
+        let Some((draft_id, revision, queue_add, queued_id, legacy, expected_turn)) = binding
+        else {
             return Ok(SubmissionAcknowledgement::Unmatched);
         };
         if matches!(&outcome, JournalOutcome::Queued(_)) && !queue_add {
+            return Ok(SubmissionAcknowledgement::Unmatched);
+        }
+        if let (Some(expected), JournalOutcome::Accepted(turn)) = (&expected_turn, &outcome)
+            && expected != &turn.0
+        {
             return Ok(SubmissionAcknowledgement::Unmatched);
         }
         let known = transaction
@@ -499,7 +507,7 @@ impl AttachmentStore {
     }
 }
 
-fn release_submission_attachments(
+pub(super) fn release_submission_attachments(
     transaction: &Transaction<'_>,
     id: &[u8],
 ) -> rusqlite::Result<Vec<BlobId>> {

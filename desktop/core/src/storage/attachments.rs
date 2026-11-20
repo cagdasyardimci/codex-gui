@@ -27,6 +27,7 @@ pub(super) mod exit_recovery;
 pub(super) mod legacy_queue;
 pub mod navigation;
 pub mod queue_edits;
+pub(super) mod queue_preferences;
 pub(super) mod queue_steering;
 mod submissions;
 pub use legacy_queue::{LegacyQueueEntry, LegacyQueueStatus};
