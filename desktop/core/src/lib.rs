@@ -8,3 +8,4 @@ pub mod identity;
 pub mod ipc;
 pub mod storage;
 pub mod workspace;
+pub mod worktree;
