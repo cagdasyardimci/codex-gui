@@ -26,6 +26,8 @@ pub fn run(arguments: impl Iterator<Item = OsString>) -> Result<(), Box<dyn std:
         return Err(invalid_paths().into());
     }
     let source = AppKitPreferences::open(staged, original_images)?;
+    #[cfg(target_os = "macos")]
+    crate::migration_recovery::stage_manifest_if_present(source.root())?;
     let destination = fs::canonicalize(destination)?;
     if !destination.is_dir()
         || source.root().starts_with(&destination)

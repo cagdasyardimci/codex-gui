@@ -157,6 +157,7 @@ jobs:
           python3 desktop/fixtures/verify_shared_codex_profile.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_appkit_retirement.py "$app/Contents/MacOS/codex-gui-desktop" --appkit-repository "$PWD"
           python3 desktop/fixtures/verify_appkit_transfer.py "$app/Contents/MacOS/codex-gui-desktop" --appkit-repository "$PWD"
+          python3 desktop/fixtures/verify_tauri_recovery.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_history_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop"
           python3 desktop/fixtures/verify_composer_attachment_fixture.py "$app/Contents/MacOS/codex-gui-desktop" --annotations

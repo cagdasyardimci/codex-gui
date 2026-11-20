@@ -826,3 +826,40 @@ pub fn verify_media_result(
     app.exit(i32::from(!passed));
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+pub async fn create_recovery_work(
+    profile: &std::path::Path,
+    source: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use codex_gui_core::{
+        checkout::CheckoutIdentity,
+        identity::ThreadId,
+        storage::attachments::AttachmentStore,
+        worktree::{WorktreeManager, WorktreeStore},
+    };
+    let profile = profile.canonicalize()?;
+    let parent = profile.parent().ok_or("missing recovery fixture root")?;
+    let source = CheckoutIdentity::capture(source)?;
+    if !parent.starts_with(std::env::temp_dir().canonicalize()?)
+        || !source.canonical_path().starts_with(parent)
+        || std::fs::read(profile.join(".appkit-cutover-fixture"))? != b"isolated cutover\n"
+    {
+        return Err("expected an isolated fixture profile".into());
+    }
+    let root = parent.join("New Tauri worktrees");
+    std::fs::create_dir(&root)?;
+    let records = WorktreeStore::initialize_tauri(&profile.join("worktrees"))?;
+    let manager = WorktreeManager::new(records, CheckoutIdentity::capture(&root)?);
+    let record = manager
+        .create(source, "new-tauri-task", "New Tauri Task")
+        .await?;
+    let thread = ThreadId("new-tauri-thread".to_owned());
+    manager
+        .bind(record.id, &thread.0, &record.checkout_path)
+        .await?;
+    let data = AttachmentStore::open(&profile.join("workspace.sqlite3"))?;
+    let draft = data.editable_thread_draft(&thread)?;
+    data.save_editor_text(draft, "Tauri draft created after cutover".to_owned())?;
+    Ok(())
+}

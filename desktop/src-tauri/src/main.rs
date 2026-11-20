@@ -20,6 +20,8 @@ mod file_preview_ipc;
 mod file_search_ipc;
 mod file_tools_ipc;
 mod fixture;
+#[cfg(target_os = "macos")]
+mod migration_recovery;
 mod navigation;
 mod project_ipc;
 mod quit_ipc;
@@ -76,6 +78,15 @@ fn main() {
     #[cfg(target_os = "macos")]
     if mode.as_deref() == Some(appkit_transfer::ARGUMENT.as_ref()) {
         if let Err(error) = tauri::async_runtime::block_on(appkit_transfer::run(arguments)) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    if mode.as_deref() == Some(migration_recovery::ARGUMENT.as_ref()) {
+        if let Err(error) = tauri::async_runtime::block_on(migration_recovery::run(arguments)) {
             eprintln!("{error}");
             std::process::exit(1);
         }

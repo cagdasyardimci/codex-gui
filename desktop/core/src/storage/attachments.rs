@@ -191,6 +191,18 @@ impl AttachmentStore {
         Ok(store)
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn snapshot_database(&self, destination: &Path) -> Result<(), AttachmentError> {
+        let destination = destination
+            .to_str()
+            .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+        let state = self.inner.state();
+        state
+            .database
+            .execute("VACUUM main INTO ?1", [destination])?;
+        Ok(())
+    }
+
     pub fn stage(&self, mut input: impl Read) -> Result<BlobLease, AttachmentError> {
         let mut temporary = Builder::new()
             .prefix(PARTIAL_PREFIX)
