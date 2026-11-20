@@ -73,7 +73,10 @@ def main():
         disabled = [row["process"] for row in relay if row["method"] == "remoteControl/disable"]
         assert len(enabled) == 3 and enabled[0] == enabled[1] and enabled[1] != enabled[2], enabled
         assert disabled == [enabled[0], enabled[2]]
-        assert all(row["params"] == {"ephemeral": True} for row in relay if not row["method"].endswith("/read"))
+        mutations = {"remoteControl/enable", "remoteControl/disable"}
+        reads = {"remoteControl/status/read", "remoteControl/client/list"}
+        assert {row["method"] for row in relay} <= mutations | reads, relay
+        assert all(row["params"] == {"ephemeral": True} for row in relay if row["method"] in mutations), relay
         assert awake.read_text(encoding="utf-8").splitlines() == ["hold", "release", "hold", "release"]
         preferences = json.loads((data / "remote-host-v1.json").read_text(encoding="utf-8"))
         assert preferences["enabled"] is False and preferences["keepAwake"] is True
