@@ -1,8 +1,11 @@
 <script module lang="ts">
+  import type { TranscriptMediaRequest } from './generated/workspace';
+
   export type SummarySource = {
     id: string;
     label: string;
     load?: () => Promise<ArrayBuffer>;
+    media: TranscriptMediaRequest;
   };
 </script>
 
@@ -11,12 +14,15 @@
   import { countChatChanges } from './diffIpc';
   import ImagePreview from './ImagePreview.svelte';
 
-  let { scope, lastTurn, checkoutRevision, sources, openChanges }: {
+  let { scope, lastTurn, checkoutRevision, sources, agentCount, openChanges, openSource, openAgents }: {
     scope: ChatRequest;
     lastTurn: LastTurnView | null | undefined;
     checkoutRevision: number;
     sources: SummarySource[];
+    agentCount: number;
     openChanges: () => void;
+    openSource: (id: string) => void;
+    openAgents: () => void;
   } = $props();
 
   let files = $state<number>();
@@ -45,12 +51,17 @@
       </dl>
     {/if}
   </div>
+  {#if agentCount > 0}
+    <button type="button" onclick={openAgents}>{agentCount} {agentCount === 1 ? 'Subagent' : 'Subagents'}</button>
+  {/if}
   {#if sources.length}
     <ul aria-label="Recent Sources">
       {#each sources as source (source.id)}
         <li>
-          {#if source.load}<ImagePreview load={source.load} alt={source.label} />
-          {:else}{source.label}{/if}
+          <button type="button" aria-label={`Inspect ${source.label}`} onclick={() => openSource(source.id)}>
+            {#if source.load}<ImagePreview load={source.load} alt={source.label} />
+            {:else}{source.label}{/if}
+          </button>
         </li>
       {/each}
     </ul>

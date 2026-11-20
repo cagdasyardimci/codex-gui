@@ -203,6 +203,8 @@ impl Navigation {
             }
         };
         let mut history = TranscriptView::default();
+        self.inspector.history(&owner.thread, &page.data);
+        self.view.inspector = self.inspector.view();
         let mut inactive = Vec::new();
         for turn in page
             .data

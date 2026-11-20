@@ -48,6 +48,7 @@ pub enum Verification {
     MessageSearch,
     AutomaticTitles,
     PinnedSummary,
+    Inspector,
     Account,
     WindowsSetup,
     Turn,
@@ -371,6 +372,7 @@ pub fn verify_attachments_result(
             | Verification::MessageSearch
             | Verification::AutomaticTitles
             | Verification::PinnedSummary
+            | Verification::Inspector
     ) {
         return Err("attachment verification was not requested".into());
     }
@@ -419,6 +421,8 @@ pub fn verify_attachments_result(
             println!("Verified installed scoped automatic chat titles");
         } else if *verification == Verification::PinnedSummary {
             println!("Verified installed scoped pinned chat summaries");
+        } else if *verification == Verification::Inspector {
+            println!("Verified installed scoped conversation inspectors");
         } else {
             println!("Verified installed draft attachment capture, ownership, Send, and reuse");
         }

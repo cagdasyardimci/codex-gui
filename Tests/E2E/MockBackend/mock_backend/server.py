@@ -167,6 +167,8 @@ class Server:
                     thread['cwd'] = cwd
             rows = [self.summary(t) for t in self.state.threads
                     if t['archived'] == p.get('archived', False) and (not cwd or t.get('cwd') == cwd)]
+            if self.scenario.get('desktopInspector'):
+                rows = [row for row in rows if not row['id'].startswith('inspector-child-')]
             if self.scenario.get('desktopMessageSearch') and cwd and not p.get('archived'):
                 if p.get('cursor') == 'search-chat-directory-next':
                     return {'data': rows[1:], 'nextCursor': None}
@@ -253,6 +255,11 @@ class Server:
         if method in ('thread/turns/list', 'thread/items/list'):
             thread = self.thread(p.get('threadId'))
             if method == 'thread/turns/list':
+                if self.scenario.get('desktopInspector') and not p.get('cursor'):
+                    if thread['id'] == 'inspector-child-slow':
+                        time.sleep(0.45)
+                    if thread['id'] == 'inspector-child-review' and not self.state.data.get('childUpdatePublished'):
+                        self.actions.append(lambda: self.update_inspector_child(thread))
                 if self.scenario.get('desktopMessageSearch') and thread['id'] == 'history-second':
                     time.sleep(0.35)
                 turns = list(reversed(thread['turns']))
@@ -336,6 +343,17 @@ class Server:
     def desktop_model(identity, hidden):
         return {'id': identity, 'model': identity, 'displayName': 'Fixture model',
                 'description': 'Local protocol fixture', 'hidden': hidden, 'isDefault': not hidden}
+
+    def update_inspector_child(self, thread):
+        self.state.data['childUpdatePublished'] = True
+        turn = thread['turns'][-1]
+        item = turn['items'][0]
+        item['text'] = 'The child reported an updated result.'
+        self.state.save()
+        for delta in ('child ', 'reported ', 'another ', 'result'):
+            self.transport.event('item/agentMessage/delta', {
+                'threadId': thread['id'], 'turnId': turn['id'], 'itemId': item['id'], 'delta': delta,
+            })
 
     def slash_usage(self, thread, turn, tokens):
         self.transport.event('thread/tokenUsage/updated', {

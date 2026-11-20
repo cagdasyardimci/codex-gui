@@ -2,7 +2,7 @@ use std::path::{Component, Path, PathBuf};
 
 use codex_gui_core::{
     checkout::CheckoutIdentity,
-    files::{local_file_revision, read_local_file},
+    files::{local_file_revision, read_local_file, validate_local_file},
     ipc::{
         IpcError, MarkdownNode, MarkdownTargetRequest, TranscriptAttachment,
         TranscriptAttachmentLocation, TranscriptImageDependency, TranscriptMediaRequest,
@@ -94,6 +94,41 @@ pub(crate) fn scoped_attachment(
         .checkout(window.label(), request.row.workspace_id)?;
     let media = state.projection.transcript_attachment(request)?;
     Ok((checkout, media))
+}
+
+#[tauri::command]
+pub fn reveal_inspector_attachment(
+    window: WebviewWindow,
+    project: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    request: TranscriptMediaRequest,
+) -> Result<(), IpcError> {
+    let (checkout, media) = scoped_attachment(&window, &project, &request)?;
+    let path = Path::new(&media.path);
+    let lease = if path.is_absolute() {
+        let store = project
+            .navigation
+            .get()
+            .ok_or(IpcError::ProjectUnavailable)?
+            .attachment_store();
+        Some(
+            store
+                .lease_sent_image(&checkout, &request.row.chat_id, &media.turn_id, path)
+                .map_err(|_| IpcError::StaleSelection)?,
+        )
+    } else {
+        validate_local_file(&checkout, path).map_err(|_| IpcError::StaleSelection)?;
+        None
+    };
+    scoped_attachment(&window, &project, &request)?;
+    let target = lease
+        .as_ref()
+        .map_or_else(|| checkout.canonical_path().join(path), |blob| blob.path());
+    if *verification == Verification::None {
+        tauri_plugin_opener::reveal_item_in_dir(target)
+            .map_err(|_| IpcError::ProjectUnavailable)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn read_attachment_image(

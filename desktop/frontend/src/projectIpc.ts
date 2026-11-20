@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   ComposerChoice, ComposerContextSelection, DraftAttachmentRequest, DraftAttachmentScope, DraftImageAnnotations, MarkdownNode, MarkdownTargetRequest, NavigationIntent, ProjectPathMatch, ProjectPathRequest, ReuseAttachmentRequest, SaveImageAnnotations, StreamChange, TranscriptImageDependency, TranscriptItem, TranscriptMediaRequest, TranscriptRowRequest, TranscriptView, WorkspaceId, WorkspaceRequest, WorkspaceSnapshot, WorkspaceSubscription,
-  ArchiveCatalog, ArchiveScope, ConfirmDeleteChat, DeleteChatSource, ExecuteSlashCommand, MessageSearchPage, MessageSearchPageRequest, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
+  ArchiveCatalog, ArchiveScope, ChildHistoryPage, ChildHistoryRequest, ConfirmDeleteChat, DeleteChatSource, ExecuteSlashCommand, InspectorSourceRequest, MessageSearchPage, MessageSearchPageRequest, ProjectContextView, SentPromptEdit, SidebarProjectRequest,
   SlashCommandOutcome, WorkspaceUpdate, WorkspaceUpdateRequest, WorkspaceView,
 } from './generated/workspace';
 
@@ -109,6 +109,22 @@ export function openMessageSearch(workspaceId: WorkspaceId): Promise<string> {
 
 export function readMessageSearchPage(request: MessageSearchPageRequest): Promise<MessageSearchPage> {
   return invoke('read_message_search_page', { request });
+}
+
+export function readChildHistory(request: ChildHistoryRequest): Promise<ChildHistoryPage> {
+  return invoke('read_child_history', { request });
+}
+
+export function openInspectorSource(request: InspectorSourceRequest): Promise<void> {
+  return invoke('open_inspector_source', { request });
+}
+
+export function readInspectorSourceDetail(request: InspectorSourceRequest): Promise<string> {
+  return invoke('read_inspector_source_detail', { request });
+}
+
+export function revealInspectorAttachment(request: TranscriptMediaRequest): Promise<void> {
+  return invoke('reveal_inspector_attachment', { request });
 }
 
 export function executeSlashCommand(request: ExecuteSlashCommand): Promise<SlashCommandOutcome> {

@@ -17,6 +17,7 @@ mod chat_deletion;
 mod composer_settings;
 mod context;
 mod git;
+mod inspector;
 mod markdown;
 mod media;
 mod message_search;
@@ -48,6 +49,10 @@ pub use context::{
     ComposerFileContext, ComposerSourceLines, ComposerTokenRange,
 };
 pub use git::{DiffFileView, DiffPatchRequest, DiffPatchView};
+pub use inspector::{
+    ChildHistoryAction, ChildHistoryPage, ChildHistoryRequest, ChildHistoryTarget, InspectorAgent,
+    InspectorSource, InspectorSourceRequest, InspectorView,
+};
 pub use markdown::{MarkdownKind, MarkdownNode, MarkdownTargetRequest};
 pub use media::{
     DraftAttachmentRequest, DraftAttachmentScope, DraftAttachmentView, DraftImageAnnotations,
@@ -327,6 +332,14 @@ pub fn workspace_typescript() -> String {
         MessageSearchPage::decl(),
         MessageSearchPageRequest::decl(),
         MessageSearchHitRequest::decl(),
+        InspectorView::decl(),
+        InspectorSource::decl(),
+        InspectorAgent::decl(),
+        InspectorSourceRequest::decl(),
+        ChildHistoryRequest::decl(),
+        ChildHistoryTarget::decl(),
+        ChildHistoryAction::decl(),
+        ChildHistoryPage::decl(),
         ChatRow::decl(),
         EditorDraft::decl(),
         ChatRequest::decl(),

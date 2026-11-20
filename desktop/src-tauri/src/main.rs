@@ -43,6 +43,7 @@ fn main() {
         Some("--verify-message-search") => fixture::Verification::MessageSearch,
         Some("--verify-automatic-titles") => fixture::Verification::AutomaticTitles,
         Some("--verify-pinned-summary") => fixture::Verification::PinnedSummary,
+        Some("--verify-inspector") => fixture::Verification::Inspector,
         Some("--verify-account") => fixture::Verification::Account,
         Some("--verify-windows-setup") => fixture::Verification::WindowsSetup,
         Some("--verify-turn") => fixture::Verification::Turn,
@@ -80,6 +81,7 @@ fn main() {
             | fixture::Verification::MessageSearch
             | fixture::Verification::AutomaticTitles
             | fixture::Verification::PinnedSummary
+            | fixture::Verification::Inspector
             | fixture::Verification::Account
             | fixture::Verification::WindowsSetup
             | fixture::Verification::Turn
@@ -176,11 +178,15 @@ fn main() {
             transcript_ipc::load_transcript_image,
             transcript_ipc::load_transcript_attachment,
             transcript_ipc::open_transcript_link,
+            transcript_ipc::reveal_inspector_attachment,
             project_ipc::navigate_workspace,
             project_ipc::read_archive,
             project_ipc::prepare_chat_deletion,
             project_ipc::open_message_search,
             project_ipc::read_message_search_page,
+            project_ipc::open_inspector_source,
+            project_ipc::read_inspector_source_detail,
+            project_ipc::read_child_history,
             project_ipc::execute_slash_command,
             project_ipc::open_sent_prompt,
             project_ipc::reveal_sidebar_project,

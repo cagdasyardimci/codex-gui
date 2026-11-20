@@ -183,6 +183,11 @@ pub fn local_file_revision(
     Ok(read_local_file(checkout, relative, limit)?.revision)
 }
 
+pub fn validate_local_file(checkout: &CheckoutIdentity, relative: &Path) -> Result<(), FileError> {
+    CapturedFile::capture(checkout, relative)?.reopen(checkout)?;
+    Ok(())
+}
+
 pub fn read_local_file(
     checkout: &CheckoutIdentity,
     relative: &Path,

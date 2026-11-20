@@ -17,6 +17,7 @@
   import DeleteChatDialog from './DeleteChatDialog.svelte';
   import MessageSearch from './MessageSearch.svelte';
   import PinnedSummary, { type SummarySource } from './PinnedSummary.svelte';
+  import ConversationInspector, { type InspectorSelection, type InspectorTab } from './ConversationInspector.svelte';
   import { MessageSearchIndex, type SearchHit } from './messageSearchIndex';
   import { paletteEntries, type PaletteEntry, type PaletteMode } from './commandPalette';
   import TranscriptRow from './TranscriptRow.svelte';
@@ -45,10 +46,11 @@
   import { verifyMessageSearch } from './messageSearchProbe';
   import { verifyAutomaticTitles } from './automaticTitlesProbe';
   import { verifyPinnedSummary } from './pinnedSummaryProbe';
+  import { verifyInspector } from './inspectorProbe';
   import 'katex/dist/katex.min.css';
   import './workspace.css';
 
-  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
+  let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'account' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();
   let snapshot = $state<WorkspaceSnapshot | null>(null);
   let editor = $state<HTMLTextAreaElement>();
   let transcript = $state<HTMLDivElement>();
@@ -106,6 +108,7 @@
   let search = $state.raw<{ workspaceId: WorkspaceId; session: string; control: HTMLElement | null }>();
   let hiddenSummaries = $state.raw(new Set<string>());
   let checkoutRevision = $state(0);
+  let inspectorViews = $state.raw(new Map<string, { opened: boolean; selection: InspectorSelection }>());
   const workspace = $derived(snapshot?.workspace);
   const navigation = $derived(snapshot?.navigation);
   const sidebar = $derived(navigation?.sidebar);
@@ -116,6 +119,7 @@
   const summaryKey = $derived(sidebar?.activeProject && selectedChat
     ? JSON.stringify([sidebar.activeProject, selectedChat]) : undefined);
   const summaryVisible = $derived(!!summaryKey && !hiddenSummaries.has(summaryKey));
+  const inspector = $derived(summaryKey ? inspectorViews.get(summaryKey) : undefined);
   const transcriptGeneration = $derived(snapshot?.transcript.generation);
   const displayedDraft = $derived(navigation?.draft?.id);
   const attachmentScope = $derived(workspaceId && displayedDraft
@@ -155,23 +159,26 @@
     return request;
   }
 
-  function recentSources() {
+  function recentSources(limit = 3) {
     const result: SummarySource[] = [];
     const items = snapshot?.transcript.items ?? [];
-    for (let at = items.length - 1; at >= 0 && result.length < 3; at--) {
+    for (let at = items.length - 1; at >= 0 && result.length < limit; at--) {
       const item = items[at]!;
       if (!item.attachments.length) continue;
       const row = rowRequest(item);
       if (!row) continue;
       let sources = summarySources.get(row);
       if (!sources) {
-        sources = item.attachments.map((attachment) => ({
-          id: JSON.stringify([row.itemId, attachment.id]), label: attachment.label,
-          load: attachment.image ? () => loadTranscriptAttachment({ row, attachmentId: attachment.id }) : undefined,
-        }));
+        sources = item.attachments.map((attachment) => {
+          const media = { row, attachmentId: attachment.id };
+          return {
+            id: JSON.stringify([row.itemId, attachment.id]), label: attachment.label, media,
+            load: attachment.image ? () => loadTranscriptAttachment(media) : undefined,
+          };
+        });
         summarySources.set(row, sources);
       }
-      result.push(...sources.slice(0, 3 - result.length));
+      result.push(...sources.slice(0, limit - result.length));
     }
     return result;
   }
@@ -185,6 +192,17 @@
 
   function openSummaryChanges(scope: ChatRequest) {
     if (scope.workspaceId === workspaceId && scope.chatId === selectedChat && !quit) showingChanges = true;
+  }
+
+  function updateInspector(scope: ChatRequest, selection: InspectorSelection, opened = true) {
+    if (!summaryKey || scope.workspaceId !== workspaceId || scope.chatId !== selectedChat || quit) return;
+    inspectorViews = new Map(inspectorViews).set(summaryKey, { opened, selection });
+  }
+
+  function openInspector(scope: ChatRequest, tab: InspectorTab, source?: string) {
+    const selection: InspectorSelection = { ...inspector?.selection, tab };
+    if (source) selection.source = source;
+    updateInspector(scope, selection);
   }
 
   function copyResponse(item: TranscriptItem) {
@@ -1025,6 +1043,7 @@
     else if (verify === 'messageSearch') void verifyMessageSearch(() => snapshot, searchIndex);
     else if (verify === 'automaticTitles') void verifyAutomaticTitles(() => snapshot);
     else if (verify === 'pinnedSummary') void verifyPinnedSummary(() => snapshot);
+    else if (verify === 'inspector') void verifyInspector(() => snapshot);
     else if (verify) void verifyHistory(verify, () => snapshot);
     return () => lifecycle.abort();
   });
@@ -1036,7 +1055,7 @@
   <header class="workspace-header">
     <button type="button" disabled={actionPending} onclick={() => void act(pickWorkspace)}>Open Project…</button>
     <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Shift+P Control+Shift+P"
-      onclick={() => openPalette('commands')}>Commands</button>
+      onclick={() => openPalette('commands')}>Command Palette</button>
     <button type="button" disabled={actionPending || !!quit} aria-keyshortcuts="Meta+Alt+Shift+O Control+Alt+Shift+O"
       onclick={() => openPalette('projects')}>Choose Project</button>
     {#if sidebar?.chats.length}
@@ -1059,6 +1078,15 @@
       <button type="button" aria-expanded={showingChanges} onclick={() => { showingChanges = !showingChanges; }}>Changes</button>
       {#if summaryScope}
         <button type="button" aria-expanded={summaryVisible} disabled={!!quit} onclick={toggleSummary}>Pinned Summary</button>
+        {@const scope = summaryScope}
+        <button type="button" aria-expanded={inspector?.opened && inspector.selection.tab === 'sources'}
+          disabled={!!quit} onclick={() => openInspector(scope, 'sources')}>Sources</button>
+        <button type="button" aria-expanded={inspector?.opened && inspector.selection.tab === 'commands'}
+          disabled={!!quit} onclick={() => openInspector(scope, 'commands')}>Commands</button>
+        {#if navigation?.inspector.agents.length}
+          <button type="button" aria-expanded={inspector?.opened && inspector.selection.tab === 'subagents'}
+            disabled={!!quit} onclick={() => openInspector(scope, 'subagents')}>Subagents</button>
+        {/if}
       {/if}
       {#if navigation?.canFork || navigation?.recoverFork}
         <button type="button" disabled={actionPending} onclick={forkChat}>
@@ -1097,7 +1125,9 @@
         {@const scope = summaryScope}
         {#key JSON.stringify([scope.workspaceId, scope.chatId])}
           <PinnedSummary {scope} lastTurn={navigation?.lastTurn} {checkoutRevision} sources={recentSources()}
-            openChanges={() => openSummaryChanges(scope)} />
+            agentCount={navigation?.inspector.agents.length ?? 0} openChanges={() => openSummaryChanges(scope)}
+            openSource={(id) => openInspector(scope, 'sources', id)}
+            openAgents={() => openInspector(scope, 'subagents')} />
         {/key}
       {/if}
       <div class="transcript-pane">
@@ -1223,6 +1253,16 @@
     </section>
     {#if showingChanges && workspace}
       <WorkspaceChanges workspaceId={workspace.workspaceId} />
+    {/if}
+    {#if summaryScope && inspector?.opened && navigation && !quit}
+      {@const scope = summaryScope}
+      {@const selection = inspector.selection}
+      {#key JSON.stringify([scope.workspaceId, scope.chatId])}
+        <ConversationInspector {scope} {selection} view={navigation.inspector}
+          attachments={selection.tab === 'sources' ? recentSources(96) : []}
+          commands={selection.tab === 'commands' ? snapshot?.transcript.items.flatMap((item) => item.commands) ?? [] : []}
+          choose={(next) => updateInspector(scope, next)} close={() => updateInspector(scope, selection, false)} />
+      {/key}
     {/if}
     {#if showingProjectContext && attachmentScope && navigation}
       {#key `${attachmentScope.workspaceId}/${attachmentScope.draftId}`}

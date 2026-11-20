@@ -1,0 +1,4 @@
+{
+  "extends": "desktop-attachments",
+  "desktopInspector": true
+}

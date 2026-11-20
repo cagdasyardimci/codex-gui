@@ -44,6 +44,7 @@ mod composer_attachments;
 mod composer_settings;
 mod conversation_fork;
 pub(crate) use composer_attachments::Mutation as ComposerAttachmentMutation;
+mod inspector;
 mod interactions;
 mod message_search;
 mod ownership;
@@ -130,6 +131,22 @@ enum Action {
         Box<message_search::FinishedSearchRead>,
         oneshot::Sender<codex_gui_core::ipc::MessageSearchPage>,
     ),
+    InspectorSource(
+        codex_gui_core::ipc::InspectorSourceRequest,
+        oneshot::Sender<tauri::Url>,
+    ),
+    InspectorSourceDetail(
+        codex_gui_core::ipc::InspectorSourceRequest,
+        oneshot::Sender<String>,
+    ),
+    PrepareChildRead(
+        codex_gui_core::ipc::ChildHistoryRequest,
+        oneshot::Sender<inspector::ChildRead>,
+    ),
+    FinishChildRead(
+        Box<inspector::ChildFinished>,
+        oneshot::Sender<codex_gui_core::ipc::ChildHistoryPage>,
+    ),
 }
 
 enum Input {
@@ -182,6 +199,7 @@ struct Navigation {
     queues: Queues,
     queue_completions: mpsc::Sender<Box<QueueCompletion>>,
     interactions: InteractionProjection,
+    inspector: inspector::Inspector,
     pages: HistoryPaging,
     prompt_revisions: prompt_revision::PromptRevisions,
     archive: archive::ArchiveState,
@@ -239,6 +257,7 @@ impl NavigationHandle {
             queues: Queues::default(),
             queue_completions,
             interactions: InteractionProjection::default(),
+            inspector: inspector::Inspector::default(),
             pages: HistoryPaging::default(),
             prompt_revisions: prompt_revision::PromptRevisions::default(),
             archive: archive::ArchiveState::default(),
@@ -378,6 +397,10 @@ impl Navigation {
                 }
                 Input::Flush => {
                     self.flush_stream();
+                    if self.inspector.flush_child() {
+                        self.view.inspector = self.inspector.view();
+                        self.publish_navigation();
+                    }
                     self.expire_sandbox_setup(tokio::time::Instant::now()).await;
                 }
             }
@@ -477,6 +500,22 @@ impl Navigation {
                 let _ = reply.send(self.finish_search_page(*result)?);
                 return Ok(None);
             }
+            Action::InspectorSource(source, reply) => {
+                let _ = reply.send(self.inspector_source_url(source)?);
+                return Ok(None);
+            }
+            Action::InspectorSourceDetail(source, reply) => {
+                let _ = reply.send(self.inspector_detail(source)?);
+                return Ok(None);
+            }
+            Action::PrepareChildRead(request, reply) => {
+                let _ = reply.send(self.prepare_child_read(request)?);
+                return Ok(None);
+            }
+            Action::FinishChildRead(result, reply) => {
+                let _ = reply.send(self.finish_child_read(*result)?);
+                return Ok(None);
+            }
             Action::SelectFolder(folder) => {
                 if self.quit.is_some() {
                     return Err(IpcError::StaleSelection);
@@ -517,6 +556,7 @@ impl Navigation {
             NavigationIntent::OpenMessageSearchHit(request) => {
                 self.open_message_search_hit(request).await?
             }
+            NavigationIntent::CloseChildHistory(scope) => self.close_child_history(scope)?,
             NavigationIntent::ReviseSentPrompt(request) => self.revise_sent_prompt(request)?,
             NavigationIntent::CancelSentPromptEdit(ticket) => self.prompt_revisions.cancel(ticket),
             NavigationIntent::SetResponseBookmark(request) => {
@@ -735,6 +775,8 @@ impl Navigation {
 
     fn adopt_focus(&mut self, thread: Option<ThreadId>) -> Result<(), Failure> {
         self.prompt_revisions.retire_editor();
+        self.inspector = inspector::Inspector::default();
+        self.view.inspector = self.inspector.view();
         let draft = match &thread {
             Some(thread) => self.store.editable_thread_draft(thread)?,
             None => self.source_draft,
@@ -804,6 +846,7 @@ impl Navigation {
 
     async fn disconnect(&mut self) {
         self.message_search = None;
+        self.inspector.close_child();
         self.retire_history_pages();
         self.sandbox_setup = None;
         self.queues = Queues::default();
@@ -961,6 +1004,8 @@ impl Navigation {
         let summary = browser.thread_summary(&thread, RPC_TIMEOUT).await?;
         let history = browser.history(&summary, None, RPC_TIMEOUT).await?;
         let page = history.for_selection(client.identity(), &thread)?;
+        self.inspector.history(&thread, &page.data);
+        self.view.inspector = self.inspector.view();
         self.owners
             .reconcile_history(client.identity(), &thread, &page.data)?;
         if let Some(backend) = self.backend.as_mut() {
@@ -1060,6 +1105,11 @@ impl Navigation {
             if matches!(method.as_str(), "item/started" | "item/completed")
             && params["item"]["type"] == "userMessage"
             && params["item"]["clientId"].is_string());
+        let inspector_changed = self
+            .selection
+            .as_ref()
+            .and_then(|selection| selection.thread.as_ref())
+            .is_some_and(|thread| self.inspector.event(thread, &event));
         let starting_thread = match &event {
             ServerEvent::Notification { method, params } if method == "turn/started" => {
                 params["threadId"]
@@ -1084,6 +1134,10 @@ impl Navigation {
         }
         if let Some(event) = routed {
             self.present_event(event);
+        }
+        if inspector_changed {
+            self.view.inspector = self.inspector.view();
+            self.publish_navigation();
         }
         if let Some(thread) = starting_thread
             && !self.queues.knows(&thread)

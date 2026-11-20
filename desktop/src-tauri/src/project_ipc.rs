@@ -254,6 +254,54 @@ pub async fn read_message_search_page(
 }
 
 #[tauri::command]
+pub async fn open_inspector_source(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    verification: State<'_, Verification>,
+    request: codex_gui_core::ipc::InspectorSourceRequest,
+) -> Result<(), IpcError> {
+    authorize_view(&window)?;
+    let workspace = request.scope.workspace_id;
+    let chat = request.scope.chat_id.clone();
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    let url = navigation.inspector_source(request).await?;
+    authorize_view(&window)?;
+    state.checkout(window.label(), workspace)?;
+    state
+        .state
+        .lock()
+        .expect("workspace state lock poisoned")
+        .projection
+        .read_conversation(workspace, &chat, |_| ())?;
+    if *verification == Verification::None {
+        open::that_detached(url.as_str()).map_err(|_| IpcError::ProjectUnavailable)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn read_child_history(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    request: codex_gui_core::ipc::ChildHistoryRequest,
+) -> Result<codex_gui_core::ipc::ChildHistoryPage, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.child_history(request).await
+}
+
+#[tauri::command]
+pub async fn read_inspector_source_detail(
+    window: WebviewWindow,
+    state: State<'_, ProjectIpc>,
+    request: codex_gui_core::ipc::InspectorSourceRequest,
+) -> Result<String, IpcError> {
+    authorize_view(&window)?;
+    let navigation = state.navigation.get().ok_or(IpcError::ProjectUnavailable)?;
+    navigation.inspector_source_detail(request).await
+}
+
+#[tauri::command]
 pub async fn execute_slash_command(
     window: WebviewWindow,
     state: State<'_, ProjectIpc>,
