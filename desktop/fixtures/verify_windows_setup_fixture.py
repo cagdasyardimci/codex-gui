@@ -49,7 +49,8 @@ def verify(app: Path, readiness: str, mode: str) -> None:
         assert methods.count("thread/resume") == 1, methods
         assert not {"thread/start", "turn/start"} & set(methods)
         setup_index, setup = next((i, e) for i, e in requests if e["method"] == "windowsSandbox/setupStart")
-        assert setup["params"]["mode"] == mode and Path(setup["params"]["cwd"]).resolve() == project
+        assert setup["params"]["mode"] == mode, setup["params"]
+        assert Path(setup["params"]["cwd"]).samefile(project), setup["params"]
         completion_index = next(i for i, e in enumerate(entries)
                                 if e["direction"] == "event" and e["method"] == "windowsSandbox/setupCompleted"
                                 and e["mode"] == mode)
