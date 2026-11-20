@@ -7,9 +7,9 @@ use super::{
     submission::message_client_id,
 };
 use crate::{
-    codex::{AppServerClient, BrowseError, CodexBrowser},
+    codex::{AppServerClient, BrowseError, ChatRead, ChatSummary, CodexBrowser, QueueSnapshot},
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
-    storage::attachments::{AttachmentStore, JournalOutcome, JournalPhase},
+    storage::attachments::{AttachmentStore, JournalOutcome, JournalPhase, PendingSubmission},
 };
 
 const MAX_HISTORY_PAGES: usize = 25;
@@ -67,14 +67,70 @@ impl WorkspaceEngine {
                 .await??;
                 result.unsent.push(entry.id);
             } else {
-                threads.entry(entry.thread).or_default().push(entry.id);
+                threads.entry(entry.thread.clone()).or_default().push(entry);
             }
         }
 
         let browser = CodexBrowser::new(client.clone());
-        for (thread, requests) in threads {
+        for (thread, entries) in threads {
+            let any_queue_add = entries.iter().any(|entry| entry.queue_add);
+            let summary = match browser.thread_summary(&thread, timeout).await {
+                Ok(summary) => summary,
+                Err(error) => {
+                    result
+                        .unresolved
+                        .extend(entries.iter().map(|entry| entry.id));
+                    result.read_failures.push((thread, error));
+                    continue;
+                }
+            };
+            let mut requests = entries.iter().map(|entry| entry.id).collect::<Vec<_>>();
+            if any_queue_add {
+                let queue = browser
+                    .queue_snapshot(&summary, timeout)
+                    .await
+                    .and_then(|snapshot| snapshot.into_for_selection(connection, &thread));
+                match queue {
+                    Ok(QueueSnapshot::Available(queued)) => {
+                        let mut queue_evidence = HashMap::new();
+                        for item in queued {
+                            if let Ok(client) = uuid::Uuid::parse_str(&item.client_user_message_id)
+                            {
+                                queue_evidence
+                                    .entry(RequestId(client))
+                                    .and_modify(|receipt| *receipt = None)
+                                    .or_insert(Some(item.id));
+                            }
+                        }
+                        requests.clear();
+                        for entry in entries {
+                            match (entry.queue_add, queue_evidence.remove(&entry.id)) {
+                                (true, Some(Some(queued_id))) => {
+                                    self.recover_queue_receipt(
+                                        connection,
+                                        &entry,
+                                        queued_id,
+                                        store,
+                                        &mut result,
+                                    )
+                                    .await?;
+                                }
+                                (true, Some(None)) => result.unresolved.push(entry.id),
+                                _ => requests.push(entry.id),
+                            }
+                        }
+                    }
+                    Ok(QueueSnapshot::Unsupported) => {}
+                    Err(error) => result.read_failures.push((thread.clone(), error)),
+                }
+            }
+            if requests.is_empty() {
+                continue;
+            }
             let mut evidence =
-                match history_evidence(&browser, connection, &thread, &requests, timeout).await {
+                match history_evidence(&browser, &summary, connection, &thread, &requests, timeout)
+                    .await
+                {
                     Ok(evidence) => evidence,
                     Err(error) => {
                         result.unresolved.extend(requests);
@@ -105,6 +161,43 @@ impl WorkspaceEngine {
         }
         Ok(result)
     }
+
+    async fn recover_queue_receipt(
+        &self,
+        connection: &ConnectionIdentity,
+        entry: &PendingSubmission,
+        queued_id: String,
+        store: &AttachmentStore,
+        result: &mut SubmissionRecovery,
+    ) -> Result<(), SubmissionError> {
+        if let Some(known) = &entry.queued_id {
+            if known != &queued_id {
+                result.unresolved.push(entry.id);
+            }
+            return Ok(());
+        }
+        let operation = OperationIdentity {
+            connection: connection.clone(),
+            request: entry.id,
+        };
+        let acknowledgement = self
+            .acknowledge(
+                &operation,
+                &entry.thread,
+                JournalOutcome::Queued(queued_id),
+                store,
+            )
+            .await?;
+        if matches!(
+            acknowledgement,
+            SubmissionAcknowledgement::Queued { .. } | SubmissionAcknowledgement::Duplicate
+        ) {
+            result.acknowledged.push(entry.id);
+        } else {
+            result.unresolved.push(entry.id);
+        }
+        Ok(())
+    }
 }
 
 enum Evidence {
@@ -115,17 +208,17 @@ enum Evidence {
 
 async fn history_evidence(
     browser: &CodexBrowser,
+    chat: &ChatRead<ChatSummary>,
     connection: &ConnectionIdentity,
     thread: &ThreadId,
     requests: &[RequestId],
     timeout: Duration,
 ) -> Result<HashMap<RequestId, Evidence>, BrowseError> {
-    let chat = browser.thread_summary(thread, timeout).await?;
     let mut cursor = None;
     let mut wanted: HashMap<_, _> = requests.iter().map(|id| (*id, Evidence::Missing)).collect();
     for _ in 0..MAX_HISTORY_PAGES {
         let page = browser
-            .history(&chat, cursor.as_ref(), timeout)
+            .history(chat, cursor.as_ref(), timeout)
             .await?
             .into_for_selection(connection, thread)?;
         for turn in &page.data {

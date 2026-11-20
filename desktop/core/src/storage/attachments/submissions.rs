@@ -16,6 +16,8 @@ pub enum JournalError {
     InvalidPhase,
     #[error("the submission received conflicting outcomes")]
     ConflictingOutcome,
+    #[error("the draft revision was already accepted or a submission still awaits reconciliation")]
+    PendingDraft,
 }
 
 pub(crate) struct JournalEntry<'a> {
@@ -26,6 +28,7 @@ pub(crate) struct JournalEntry<'a> {
     pub request: &'a Value,
     pub attachments: &'a [BlobLease],
     pub checkout: &'a CheckoutIdentity,
+    pub queue_add: bool,
 }
 
 pub(crate) struct SubmissionWrite {
@@ -44,7 +47,8 @@ pub(crate) struct PendingSubmission {
     pub thread: ThreadId,
     pub reserved: bool,
     pub matches_checkout: bool,
-    pub draft: DraftId,
+    pub queue_add: bool,
+    pub queued_id: Option<String>,
 }
 
 pub(crate) enum JournalPhase {
@@ -55,12 +59,14 @@ pub(crate) enum JournalPhase {
 pub(crate) enum JournalOutcome {
     Accepted(TurnId),
     Rejected { code: i64 },
+    Queued(String),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SubmissionAcknowledgement {
     Accepted { retired_draft: bool },
     Rejected,
+    Queued { retired_draft: bool },
     Duplicate,
     Unmatched,
 }
@@ -83,6 +89,27 @@ impl AttachmentStore {
             .database
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let id = entry.id.0.as_bytes().as_slice();
+        if entry.queue_add
+            && transaction.query_row(
+                "SELECT EXISTS (
+                     SELECT 1 FROM submissions AS s
+                     LEFT JOIN queue_receipts AS q ON q.id = s.id
+                     LEFT JOIN submission_outcomes AS o ON o.id = s.id
+                     WHERE s.draft_id = ?1 AND s.checkout_key = ?2
+                       AND s.phase IN ('reserved', 'dispatching')
+                       AND ((o.id IS NULL AND q.queued_id IS NULL)
+                            OR (s.draft_revision = ?3 AND (q.queued_id IS NOT NULL OR o.turn_id IS NOT NULL)))
+                 )",
+                params![
+                    entry.draft.0.as_bytes().as_slice(),
+                    entry.checkout.storage_key(),
+                    entry.revision.as_sql()
+                ],
+                |row| row.get::<_, bool>(0),
+            )?
+        {
+            return Err(JournalError::PendingDraft);
+        }
         let inserted = transaction.execute(
             "INSERT INTO submissions (id, thread_id, draft_id, draft_revision, request, phase, checkout_key)
              SELECT ?1, thread_id, draft_id, ?4, ?5, 'reserved', ?6
@@ -98,6 +125,9 @@ impl AttachmentStore {
         )?;
         if inserted == 0 {
             return Err(AttachmentError::ConflictingThreadDraft.into());
+        }
+        if entry.queue_add {
+            transaction.execute("INSERT INTO queue_receipts (id) VALUES (?1)", [id])?;
         }
         let unique: BTreeSet<_> = entry.attachments.iter().map(BlobLease::id).collect();
         for blob in unique {
@@ -121,8 +151,10 @@ impl AttachmentStore {
     ) -> Result<Vec<PendingSubmission>, JournalError> {
         let state = self.inner.state();
         let mut statement = state.database.prepare(
-            "SELECT s.id, s.thread_id, s.phase = 'reserved', COALESCE(s.checkout_key = ?2, FALSE), s.draft_id
+            "SELECT s.id, s.thread_id, s.phase = 'reserved', COALESCE(s.checkout_key = ?2, FALSE),
+                    q.id IS NOT NULL, q.queued_id
              FROM submissions AS s
+             LEFT JOIN queue_receipts AS q ON q.id = s.id
              WHERE json_extract(s.request, '$.cwd') = ?1 AND s.phase IN ('reserved', 'dispatching')
                 AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS outcome WHERE outcome.id = s.id)
              ORDER BY s.thread_id, s.id",
@@ -135,7 +167,8 @@ impl AttachmentStore {
                     thread: ThreadId(row.get(1)?),
                     reserved: row.get(2)?,
                     matches_checkout: row.get(3)?,
-                    draft: DraftId(Uuid::from_bytes(row.get(4)?)),
+                    queue_add: row.get(4)?,
+                    queued_id: row.get(5)?,
                 })
             },
         )?;
@@ -154,10 +187,24 @@ impl AttachmentStore {
         checkout: &CheckoutIdentity,
         draft: DraftId,
     ) -> Result<bool, JournalError> {
-        Ok(self
-            .pending_submissions(checkout)?
-            .iter()
-            .any(|record| record.matches_checkout && record.draft == draft))
+        let state = self.inner.state();
+        let mut query = state.database.prepare(
+            "SELECT s.id FROM submissions AS s
+             LEFT JOIN queue_receipts AS q ON q.id = s.id
+             WHERE s.checkout_key = ?1 AND s.draft_id = ?2
+               AND s.phase IN ('reserved', 'dispatching') AND q.queued_id IS NULL
+               AND NOT EXISTS (SELECT 1 FROM submission_outcomes AS o WHERE o.id = s.id)",
+        )?;
+        let ids = query.query_map(
+            params![checkout.storage_key(), draft.0.as_bytes().as_slice()],
+            |row| row.get(0).map(|id| RequestId(Uuid::from_bytes(id))),
+        )?;
+        for id in ids {
+            if !state.active_submissions.contains(&id?) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub(crate) fn set_submission_phase(
@@ -192,15 +239,11 @@ impl AttachmentStore {
             }
             return Err(JournalError::InvalidPhase);
         }
-        let mut released = Vec::new();
-        if matches!(phase, JournalPhase::Unsent) {
-            let mut delete = transaction.prepare(
-                "DELETE FROM submission_attachments WHERE submission_id = ?1 RETURNING blob_id",
-            )?;
-            released = delete
-                .query_map([id], |row| row.get::<_, [u8; 32]>(0).map(BlobId))?
-                .collect::<Result<Vec<_>, _>>()?;
-        }
+        let released = if matches!(phase, JournalPhase::Unsent) {
+            release_submission_attachments(&transaction, id)?
+        } else {
+            Vec::new()
+        };
         transaction.commit()?;
         state.candidates.extend(released);
         Ok(())
@@ -220,21 +263,32 @@ impl AttachmentStore {
         let id = id.0.as_bytes().as_slice();
         let binding = transaction
             .query_row(
-                "SELECT draft_id, draft_revision FROM submissions
-             WHERE id = ?1 AND thread_id = ?2 AND phase = 'dispatching'
-               AND checkout_key = ?3 AND json_extract(request, '$.cwd') = ?4",
+                "SELECT s.draft_id, s.draft_revision, q.id IS NOT NULL, q.queued_id
+                 FROM submissions AS s LEFT JOIN queue_receipts AS q ON q.id = s.id
+                 WHERE s.id = ?1 AND s.thread_id = ?2 AND s.phase = 'dispatching'
+                   AND s.checkout_key = ?3 AND json_extract(s.request, '$.cwd') = ?4",
                 params![
                     id,
                     thread.0,
                     checkout.storage_key(),
                     checkout.canonical_path().to_str()
                 ],
-                |row| Ok((row.get::<_, [u8; 16]>(0)?, row.get::<_, i64>(1)?)),
+                |row| {
+                    Ok((
+                        row.get::<_, [u8; 16]>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, bool>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                    ))
+                },
             )
             .optional()?;
-        let Some((draft_id, revision)) = binding else {
+        let Some((draft_id, revision, queue_add, queued_id)) = binding else {
             return Ok(SubmissionAcknowledgement::Unmatched);
         };
+        if matches!(&outcome, JournalOutcome::Queued(_)) && !queue_add {
+            return Ok(SubmissionAcknowledgement::Unmatched);
+        }
         let known = transaction
             .query_row(
                 "SELECT turn_id FROM submission_outcomes WHERE id = ?1",
@@ -250,18 +304,49 @@ impl AttachmentStore {
                 {
                     Ok(SubmissionAcknowledgement::Duplicate)
                 }
-                JournalOutcome::Accepted(_) => Err(JournalError::ConflictingOutcome),
+                JournalOutcome::Queued(incoming)
+                    if turn.is_some() && queued_id.as_ref().is_none_or(|id| id == &incoming) =>
+                {
+                    Ok(SubmissionAcknowledgement::Duplicate)
+                }
+                _ => Err(JournalError::ConflictingOutcome),
             };
         }
 
         let mut released = Vec::new();
         let acknowledgement = match outcome {
             JournalOutcome::Rejected { code } => {
+                if queued_id.is_some() {
+                    return Err(JournalError::ConflictingOutcome);
+                }
                 transaction.execute(
                     "INSERT INTO submission_outcomes (id, rejection_code) VALUES (?1, ?2)",
                     params![id, code],
                 )?;
+                if queue_add {
+                    released = release_submission_attachments(&transaction, id)?;
+                }
                 SubmissionAcknowledgement::Rejected
+            }
+            JournalOutcome::Queued(incoming) => {
+                if let Some(known) = queued_id {
+                    return if known == incoming {
+                        Ok(SubmissionAcknowledgement::Duplicate)
+                    } else {
+                        Err(JournalError::ConflictingOutcome)
+                    };
+                }
+                transaction.execute(
+                    "UPDATE queue_receipts SET queued_id = ?2 WHERE id = ?1",
+                    params![id, incoming],
+                )?;
+                SubmissionAcknowledgement::Queued {
+                    retired_draft: retire_submitted_revision(
+                        &transaction,
+                        DraftId(Uuid::from_bytes(draft_id)),
+                        DraftRevision::from_sql(revision),
+                    )?,
+                }
             }
             JournalOutcome::Accepted(turn) => {
                 transaction.execute(
@@ -277,24 +362,45 @@ impl AttachmentStore {
                     "DELETE FROM submission_attachments WHERE submission_id = ?1",
                     [id],
                 )?;
-                let draft = DraftId(Uuid::from_bytes(draft_id));
-                let revision = DraftRevision::from_sql(revision);
-                let retired_draft = retire_submitted_revision(&transaction, draft, revision)?;
-                if retired_draft {
-                    released = replace_references(
+                let retired_draft = queued_id.is_none()
+                    && retire_submitted_revision(
                         &transaction,
-                        &self.inner.blobs,
-                        &draft_id,
-                        std::iter::empty(),
+                        DraftId(Uuid::from_bytes(draft_id)),
+                        DraftRevision::from_sql(revision),
                     )?;
-                }
                 SubmissionAcknowledgement::Accepted { retired_draft }
             }
         };
+        if matches!(
+            acknowledgement,
+            SubmissionAcknowledgement::Accepted {
+                retired_draft: true
+            } | SubmissionAcknowledgement::Queued {
+                retired_draft: true
+            }
+        ) {
+            released.extend(replace_references(
+                &transaction,
+                &self.inner.blobs,
+                &draft_id,
+                std::iter::empty(),
+            )?);
+        }
         transaction.commit()?;
         state.candidates.extend(released);
         Ok(acknowledgement)
     }
+}
+
+fn release_submission_attachments(
+    transaction: &Transaction<'_>,
+    id: &[u8],
+) -> rusqlite::Result<Vec<BlobId>> {
+    let mut delete = transaction
+        .prepare("DELETE FROM submission_attachments WHERE submission_id = ?1 RETURNING blob_id")?;
+    delete
+        .query_map([id], |row| row.get::<_, [u8; 32]>(0).map(BlobId))?
+        .collect()
 }
 
 pub(in crate::storage) fn migrate_submissions(
@@ -341,4 +447,16 @@ pub(in crate::storage) fn migrate_submission_checkout(
     transaction: &Transaction<'_>,
 ) -> rusqlite::Result<()> {
     transaction.execute_batch("ALTER TABLE submissions ADD COLUMN checkout_key TEXT")
+}
+
+pub(in crate::storage) fn migrate_queue_receipts(
+    transaction: &Transaction<'_>,
+) -> rusqlite::Result<()> {
+    transaction.execute_batch(
+        "CREATE INDEX submissions_checkout_draft ON submissions (checkout_key, draft_id);
+        CREATE TABLE queue_receipts (
+            id BLOB NOT NULL PRIMARY KEY REFERENCES submissions (id) ON DELETE CASCADE,
+            queued_id TEXT CHECK (length(queued_id) > 0)
+        ) STRICT, WITHOUT ROWID;",
+    )
 }

@@ -24,6 +24,7 @@ const MIGRATIONS: &[Migration] = &[
     attachments::appkit_drafts::migrate,
     attachments::navigation::migrate,
     attachments::exit_recovery::migrate,
+    attachments::migrate_queue_receipts,
 ];
 
 #[derive(Debug, Error)]

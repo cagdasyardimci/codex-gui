@@ -2,15 +2,16 @@ use tempfile::{TempDir, tempdir};
 
 use super::*;
 use crate::{
-    identity::{OperationIdentity, RequestId},
+    identity::{OperationIdentity, RequestId, ThreadId, TurnId},
     storage::{
-        attachments::AttachmentStore,
+        attachments::{AttachmentStore, JournalError},
         drafts::{DraftId, DraftPatch, DraftRevision, DraftSave, read_draft, save_draft},
         open_workspace_database,
     },
     workspace::{
-        PreparedThread, SendDraft, SendIntent, SendSettings, SubmissionAcknowledgement,
-        WorkspaceAction, WorkspaceEngine,
+        ExecutionTarget, PreparedThread, SendDraft, SendIntent, SendSettings,
+        SubmissionAcknowledgement, SubmissionError, WorkspaceAction, WorkspaceEngine,
+        WorkspaceError,
     },
 };
 
@@ -104,6 +105,232 @@ impl Fixture {
             attachment_path,
         )
     }
+
+    fn queue_intent(&self, draft: DraftId, id: u128) -> Arc<SendIntent> {
+        Arc::new(SendIntent {
+            operation: OperationIdentity {
+                connection: self.transport.client.identity().clone(),
+                request: RequestId(Uuid::from_u128(id)),
+            },
+            draft: SendDraft {
+                id: draft,
+                revision: DraftRevision::INITIAL,
+                text: "  café\n".into(),
+                context: Vec::new(),
+                attachments: vec![self.store.stage(&b"test image"[..]).unwrap()],
+            },
+            settings: SendSettings {
+                model: Some("captured-model".into()),
+                ..SendSettings::default()
+            },
+        })
+    }
+}
+
+fn queue_target() -> ExecutionTarget {
+    ExecutionTarget {
+        thread: ThreadId("thread-1".into()),
+        turn: TurnId("active-turn".into()),
+    }
+}
+
+fn active_turn_event(method: &str, status: &str) -> ServerEvent {
+    ServerEvent::Notification {
+        method: method.into(),
+        params: json!({"threadId":"thread-1", "turn":{"id":"active-turn","status":status}}),
+    }
+}
+
+#[tokio::test]
+async fn queue_add_requires_its_active_turn_and_keeps_newer_typing() {
+    let (mut fixture, _prepared, _, draft, attachment) = Fixture::prepared().await;
+    let client = &fixture.transport.client;
+    let engine = &fixture.engine;
+    let store = &fixture.store;
+    let intent = fixture.queue_intent(draft, 80);
+    let mut db =
+        open_workspace_database(&fixture.scratch.path().join("workspace.sqlite3")).unwrap();
+    assert!(matches!(
+        engine
+            .enqueue_follow_up(intent.clone(), queue_target(), client, store, DEADLINE)
+            .await,
+        Err(SubmissionError::Workspace(WorkspaceError::InactiveTurn))
+    ));
+    engine
+        .observe_execution_event(
+            client.identity(),
+            &active_turn_event("turn/started", "inProgress"),
+        )
+        .await
+        .unwrap();
+    let (reply, ()) = time::timeout(DEADLINE, async {
+        tokio::join!(
+            engine.enqueue_follow_up(intent.clone(), queue_target(), client, store, DEADLINE),
+            async {
+                let outgoing = next_request(&mut fixture.server).await;
+                assert_eq!(outgoing["method"], "thread/queue/add");
+                let client_id = intent.operation.request.0.to_string();
+                assert_eq!(outgoing["params"], json!({
+                    "threadId":"thread-1", "clientUserMessageId": client_id,
+                    "input":[{"type":"text","text":"  café\n"},{"type":"localImage","path":attachment}]
+                }));
+                let journaled: String = db.query_row(
+                    "SELECT request FROM submissions JOIN queue_receipts USING (id) WHERE phase = 'dispatching'",
+                    [], |row| row.get(0),
+                ).unwrap();
+                assert_eq!(serde_json::from_str::<Value>(&journaled).unwrap()["model"], "captured-model");
+                assert_eq!(
+                    save_draft(&mut db, draft, Some(DraftRevision::INITIAL), DraftRevision::INITIAL.next().unwrap(),
+                        &DraftPatch { text: Some("already typing the next draft".into()), context: None }).unwrap(),
+                    DraftSave::Applied,
+                );
+                respond(&mut fixture.replies, outgoing["id"].clone(), json!({
+                    "queuedSubmission":{"id":"queued-80","clientUserMessageId":client_id,"input":outgoing["params"]["input"]}
+                })).await;
+            }
+        )
+    }).await.unwrap();
+    assert_eq!(
+        reply.unwrap().acknowledgement,
+        SubmissionAcknowledgement::Queued {
+            retired_draft: false
+        }
+    );
+    assert_eq!(
+        read_draft(&db, draft).unwrap().unwrap().text,
+        "already typing the next draft"
+    );
+    assert!(
+        !store
+            .has_unresolved_submission(&fixture.checkout, draft)
+            .unwrap()
+    );
+    assert!(
+        time::timeout(Duration::from_millis(50), fixture.server.next_frame())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn a_lost_queue_reply_recovers_the_receipt_then_consumption_moves_attachment_ownership() {
+    let (mut fixture, prepared, _, draft, attachment) = Fixture::prepared().await;
+    drop(prepared);
+    let path = fixture.scratch.path().join("workspace.sqlite3");
+    let intent = fixture.queue_intent(draft, 81);
+    let request = intent.operation.request;
+    let duplicate = fixture.queue_intent(draft, 82);
+    let client = &fixture.transport.client;
+    let engine = &fixture.engine;
+    let store = &fixture.store;
+    let client_id = request.0.to_string();
+    engine
+        .observe_execution_event(
+            client.identity(),
+            &active_turn_event("turn/started", "inProgress"),
+        )
+        .await
+        .unwrap();
+    let (reply, ()) = time::timeout(DEADLINE, async {
+        tokio::join!(
+            engine.enqueue_follow_up(intent, queue_target(), client, store, DEADLINE),
+            async {
+                let outgoing = next_request(&mut fixture.server).await;
+                assert_eq!(outgoing["method"], "thread/queue/add");
+                assert_eq!(outgoing["params"]["clientUserMessageId"], client_id);
+                assert!(matches!(
+                    engine
+                        .enqueue_follow_up(duplicate, queue_target(), client, store, DEADLINE)
+                        .await,
+                    Err(SubmissionError::Journal(JournalError::PendingDraft))
+                ));
+                // The server received the add. The active turn completes before its add reply reaches the client.
+                engine
+                    .observe_execution_event(
+                        client.identity(),
+                        &active_turn_event("turn/completed", "completed"),
+                    )
+                    .await
+                    .unwrap();
+            }
+        )
+    })
+    .await
+    .unwrap();
+    assert!(matches!(
+        reply.unwrap().response,
+        Err(RequestError::Stopped(Delivery::PossiblySent))
+    ));
+    assert!(
+        store
+            .has_unresolved_submission(&fixture.checkout, draft)
+            .unwrap()
+    );
+
+    let Fixture {
+        checkout,
+        scratch: _scratch,
+        store,
+        ..
+    } = fixture;
+    drop(store);
+    let store = AttachmentStore::open(&path).unwrap();
+    let (transport, server_in, mut replies) = transport_for(4096, 2, Some(checkout.clone()));
+    let client = &transport.client;
+    let (engine, _effects) = WorkspaceEngine::start(client.identity().clone());
+    let mut server = JsonlReader::new(server_in, MAX_FRAME_BYTES);
+    let db = open_workspace_database(&path).unwrap();
+    assert_eq!(read_draft(&db, draft).unwrap().unwrap().text, "  café\n");
+    let ownership = || -> (i64, i64) {
+        db.query_row(
+            "SELECT (SELECT count(*) FROM submission_attachments), (SELECT count(*) FROM sent_submission_attachments)",
+            [], |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap()
+    };
+    for queued in [true, false] {
+        let (recovery, ()) = time::timeout(DEADLINE, async {
+            tokio::join!(engine.recover_submissions(client, &store, DEADLINE), async {
+                let summary = next_request(&mut server).await;
+                assert_eq!(summary["method"], "thread/read");
+                assert_eq!(summary["params"], json!({"threadId":"thread-1","includeTurns":false}));
+                respond(&mut replies, summary["id"].clone(), json!({
+                    "thread":{"id":"thread-1","cwd":checkout.canonical_path(),"preview":"","createdAt":0,"updatedAt":0,"status":{"type":"idle"}}
+                })).await;
+                let list = next_request(&mut server).await;
+                assert_eq!(list["method"], "thread/queue/list");
+                assert_eq!(list["params"]["threadId"], "thread-1");
+                let data = if queued {
+                    vec![json!({"id":"queued-81","clientUserMessageId":client_id,"input":[{"type":"text","text":"  café\n"}]})]
+                } else {
+                    Vec::new()
+                };
+                respond(&mut replies, list["id"].clone(), json!({"data":data,"nextCursor":null})).await;
+                if !queued {
+                    let history = next_request(&mut server).await;
+                    assert_eq!(history["method"], "thread/turns/list");
+                    assert_eq!(history["params"]["threadId"], "thread-1");
+                    respond(&mut replies, history["id"].clone(), json!({
+                        "data":[{"id":"consuming-turn","status":"completed","items":[
+                            {"type":"userMessage","id":"consumed","clientId":client_id,"content":[]}
+                        ]}],"nextCursor":null
+                    })).await;
+                }
+            })
+        }).await.unwrap();
+        let recovery = recovery.unwrap();
+        assert_eq!(recovery.acknowledged, [request]);
+        assert!(recovery.unresolved.is_empty());
+        assert!(!store.has_unresolved_submission(&checkout, draft).unwrap());
+        assert_eq!(read_draft(&db, draft).unwrap().unwrap().text, "");
+        assert_eq!(ownership(), if queued { (1, 0) } else { (0, 1) });
+        store.collect().unwrap();
+        assert!(attachment.is_file());
+    }
+    assert!(
+        time::timeout(Duration::from_millis(50), server.next_frame())
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]

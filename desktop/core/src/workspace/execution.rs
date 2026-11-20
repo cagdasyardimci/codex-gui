@@ -35,6 +35,12 @@ pub struct ExecutionObservation {
     kind: ObservationKind,
 }
 
+impl ExecutionObservation {
+    pub(super) fn ended_turn(&self) -> Option<&ExecutionTarget> {
+        matches!(self.kind, ObservationKind::TurnEnded).then_some(&self.target)
+    }
+}
+
 enum ObservationKind {
     TurnStarted,
     TurnEnded,
@@ -65,6 +71,10 @@ pub enum InterruptError {
 }
 
 impl ExecutionState {
+    pub(super) fn is_active(&self, target: &ExecutionTarget) -> bool {
+        self.active.contains(target)
+    }
+
     pub(super) fn snapshot(&self) -> ExecutionSnapshot {
         ExecutionSnapshot {
             active_turns: self.active.iter().cloned().collect(),

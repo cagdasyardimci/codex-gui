@@ -5,7 +5,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, mpsc, oneshot, watch};
 
 use crate::{
-    identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId},
+    identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
     storage::drafts::DraftId,
 };
 
@@ -62,6 +62,7 @@ pub enum WorkspaceAction {
     ReserveThreadSubmission {
         operation: OperationIdentity,
         thread: ThreadId,
+        active_turn: Option<TurnId>,
         stopped: watch::Sender<bool>,
     },
     ThreadPrepared {
@@ -213,7 +214,7 @@ struct State {
     rows: IndexMap<DraftId, NavigationTarget>,
     pending: HashMap<RequestId, Arc<SendIntent>>,
     threads: HashMap<ThreadId, DraftId>,
-    submissions: HashMap<RequestId, watch::Sender<bool>>,
+    submissions: HashMap<RequestId, SubmissionClaim>,
     interactions: InteractionRouter,
     execution: ExecutionState,
     writable: IndexSet<ThreadId>,
@@ -221,6 +222,11 @@ struct State {
 }
 
 type ReservedPreparation = (mpsc::OwnedPermit<PrepareThread>, PrepareThread);
+
+struct SubmissionClaim {
+    stopped: watch::Sender<bool>,
+    active_turn: Option<ExecutionTarget>,
+}
 
 impl State {
     fn new(connection: ConnectionIdentity, interactions: InteractionRouter) -> Self {
@@ -265,6 +271,7 @@ impl State {
             WorkspaceAction::ReserveThreadSubmission {
                 operation,
                 thread,
+                active_turn,
                 stopped,
             } => {
                 self.validate_owner(&operation)?;
@@ -274,7 +281,20 @@ impl State {
                 if self.submissions.contains_key(&operation.request) {
                     return Err(WorkspaceError::AlreadyAdmitted);
                 }
-                self.submissions.insert(operation.request, stopped);
+                let active_turn = active_turn.map(|turn| ExecutionTarget { thread, turn });
+                if active_turn
+                    .as_ref()
+                    .is_some_and(|target| !self.execution.is_active(target))
+                {
+                    return Err(WorkspaceError::InactiveTurn);
+                }
+                self.submissions.insert(
+                    operation.request,
+                    SubmissionClaim {
+                        stopped,
+                        active_turn,
+                    },
+                );
                 Ok(None)
             }
             WorkspaceAction::ThreadPrepared { operation, thread } => {
@@ -289,11 +309,11 @@ impl State {
             }
             WorkspaceAction::StopSubmission { operation } => {
                 self.validate_owner(&operation)?;
-                let stopped = self
+                let claim = self
                     .submissions
                     .remove(&operation.request)
                     .ok_or(WorkspaceError::MissingPreparation)?;
-                stopped.send_replace(true);
+                claim.stopped.send_replace(true);
                 if let Some(intent) = self.pending.remove(&operation.request) {
                     self.rows.shift_remove(&intent.draft.id);
                 }
@@ -312,6 +332,13 @@ impl State {
                     && !self.writable.contains(&event.target.thread)
                 {
                     return Err(WorkspaceError::UnownedExecution);
+                }
+                if let Some(ended) = event.ended_turn() {
+                    for claim in self.submissions.values() {
+                        if claim.active_turn.as_ref() == Some(ended) {
+                            claim.stopped.send_replace(true);
+                        }
+                    }
                 }
                 self.execution.observe(event);
                 Ok(None)
@@ -398,7 +425,13 @@ impl State {
         self.rows
             .insert(draft, NavigationTarget::Preparing(request));
         let (stop, stopped) = watch::channel(false);
-        self.submissions.insert(request, stop);
+        self.submissions.insert(
+            request,
+            SubmissionClaim {
+                stopped: stop,
+                active_turn: None,
+            },
+        );
         Ok((slot, PrepareThread { intent, stopped }))
     }
 
@@ -447,8 +480,8 @@ impl State {
         self.rows
             .retain(|_, target| matches!(target, NavigationTarget::Thread(_)));
         self.pending.clear();
-        for (_, stopped) in self.submissions.drain() {
-            stopped.send_replace(true);
+        for (_, claim) in self.submissions.drain() {
+            claim.stopped.send_replace(true);
         }
         self.interactions.replace_connection(replacement.clone());
         self.execution.retire_connection();

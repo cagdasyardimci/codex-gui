@@ -1,17 +1,18 @@
 use std::{sync::Arc, time::Duration};
 
+use serde::Deserialize;
 use serde_json::{Value, json};
 use thiserror::Error;
 use tokio::sync::watch;
 use uuid::Uuid;
 
 use super::{
-    PreparedThread, SendIntent, SubmissionAcknowledgement, WorkspaceAction, WorkspaceEngine,
-    WorkspaceError,
+    ExecutionTarget, PreparedThread, SendIntent, SubmissionAcknowledgement, WorkspaceAction,
+    WorkspaceEngine, WorkspaceError,
 };
 use crate::{
     checkout::CheckoutError,
-    codex::{AppServerClient, Delivery, RequestError, ServerEvent},
+    codex::{AppServerClient, Delivery, QueuedSubmission, RequestError, ServerEvent},
     identity::{ConnectionIdentity, OperationIdentity, RequestId, ThreadId, TurnId},
     storage::attachments::{
         AttachmentStore, JournalEntry, JournalError, JournalOutcome, JournalPhase, SubmissionWrite,
@@ -40,11 +41,31 @@ pub struct SubmissionReply {
     pub acknowledgement: SubmissionAcknowledgement,
 }
 
+enum SubmissionKind {
+    Turn,
+    Queue,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueAddReply {
+    queued_submission: QueuedSubmission,
+}
+
 impl WorkspaceEngine {
     pub async fn reserve_thread_submission(
         &self,
         intent: Arc<SendIntent>,
         thread: ThreadId,
+    ) -> Result<PreparedThread, WorkspaceError> {
+        self.reserve_submission(intent, thread, None).await
+    }
+
+    async fn reserve_submission(
+        &self,
+        intent: Arc<SendIntent>,
+        thread: ThreadId,
+        active_turn: Option<TurnId>,
     ) -> Result<PreparedThread, WorkspaceError> {
         if !intent.draft.has_content() {
             return Err(WorkspaceError::EmptyDraft);
@@ -53,6 +74,7 @@ impl WorkspaceEngine {
         self.apply(WorkspaceAction::ReserveThreadSubmission {
             operation: intent.operation.clone(),
             thread: thread.clone(),
+            active_turn,
             stopped: stop,
         })
         .await?;
@@ -74,31 +96,65 @@ impl WorkspaceEngine {
         let client = client.clone();
         let store = store.clone();
         tokio::spawn(async move {
-            let operation = prepared.intent.operation.clone();
-            let outcome = async {
-                let (response, _write) = dispatch(&prepared, &client, &store, timeout).await?;
-                let acknowledgement = match reply_outcome(&response) {
-                    Some(outcome) => {
-                        engine
-                            .acknowledge(&operation, &prepared.thread, outcome, &store)
-                            .await?
-                    }
-                    None => SubmissionAcknowledgement::Unmatched,
-                };
-                Ok(SubmissionReply {
-                    operation: operation.clone(),
-                    thread: prepared.thread,
-                    response,
-                    acknowledgement,
-                })
-            }
-            .await;
-            let _ = engine
-                .apply(WorkspaceAction::SubmissionFinished { operation })
-                .await;
-            outcome
+            engine
+                .finish_submission(prepared, SubmissionKind::Turn, &client, &store, timeout)
+                .await
         })
         .await?
+    }
+
+    pub async fn enqueue_follow_up(
+        &self,
+        intent: Arc<SendIntent>,
+        target: ExecutionTarget,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        timeout: Duration,
+    ) -> Result<SubmissionReply, SubmissionError> {
+        let engine = self.clone();
+        let client = client.clone();
+        let store = store.clone();
+        tokio::spawn(async move {
+            let prepared = engine
+                .reserve_submission(intent, target.thread, Some(target.turn))
+                .await?;
+            engine
+                .finish_submission(prepared, SubmissionKind::Queue, &client, &store, timeout)
+                .await
+        })
+        .await?
+    }
+
+    async fn finish_submission(
+        &self,
+        prepared: PreparedThread,
+        kind: SubmissionKind,
+        client: &AppServerClient,
+        store: &AttachmentStore,
+        timeout: Duration,
+    ) -> Result<SubmissionReply, SubmissionError> {
+        let operation = prepared.intent.operation.clone();
+        let outcome = async {
+            let (response, _write) = dispatch(&prepared, &kind, client, store, timeout).await?;
+            let acknowledgement = match reply_outcome(&kind, operation.request, &response) {
+                Some(outcome) => {
+                    self.acknowledge(&operation, &prepared.thread, outcome, store)
+                        .await?
+                }
+                None => SubmissionAcknowledgement::Unmatched,
+            };
+            Ok(SubmissionReply {
+                operation: operation.clone(),
+                thread: prepared.thread,
+                response,
+                acknowledgement,
+            })
+        }
+        .await;
+        let _ = self
+            .apply(WorkspaceAction::SubmissionFinished { operation })
+            .await;
+        outcome
     }
 
     pub async fn observe_submission_event(
@@ -147,13 +203,31 @@ impl WorkspaceEngine {
     }
 }
 
-fn reply_outcome(response: &Result<Value, RequestError>) -> Option<JournalOutcome> {
-    match response {
-        Ok(reply) => Some(JournalOutcome::Accepted(TurnId(nonempty_string(
-            &reply["turn"]["id"],
-        )?))),
-        Err(RequestError::Remote(error)) => Some(JournalOutcome::Rejected { code: error.code }),
-        Err(_) => None,
+fn reply_outcome(
+    kind: &SubmissionKind,
+    request: RequestId,
+    response: &Result<Value, RequestError>,
+) -> Option<JournalOutcome> {
+    match (kind, response) {
+        (SubmissionKind::Turn, Ok(reply)) => Some(JournalOutcome::Accepted(TurnId(
+            nonempty_string(&reply["turn"]["id"])?,
+        ))),
+        (SubmissionKind::Queue, Ok(reply)) => {
+            let entry: QueueAddReply = serde_json::from_value(reply.clone()).ok()?;
+            let entry = entry.queued_submission;
+            (!entry.id.is_empty() && entry.client_user_message_id == request.0.to_string())
+                .then_some(JournalOutcome::Queued(entry.id))
+        }
+        (SubmissionKind::Turn, Err(RequestError::Remote(error))) => {
+            Some(JournalOutcome::Rejected { code: error.code })
+        }
+        // Internal errors can follow a committed queue write.
+        (SubmissionKind::Queue, Err(RequestError::Remote(error)))
+            if matches!(error.code, -32602..=-32600) =>
+        {
+            Some(JournalOutcome::Rejected { code: error.code })
+        }
+        _ => None,
     }
 }
 
@@ -189,6 +263,7 @@ fn nonempty_string(value: &Value) -> Option<String> {
 
 async fn dispatch(
     prepared: &PreparedThread,
+    kind: &SubmissionKind,
     client: &AppServerClient,
     store: &AttachmentStore,
     timeout: Duration,
@@ -208,13 +283,24 @@ async fn dispatch(
         .canonical_path()
         .to_str()
         .ok_or(SubmissionError::NonUnicodePath)?;
-    let request = turn_request(prepared, cwd)?;
+    let journaled = turn_request(prepared, cwd)?;
+    let (method, request, queue_add) = match kind {
+        SubmissionKind::Turn => ("turn/start", journaled.clone(), false),
+        SubmissionKind::Queue => (
+            "thread/queue/add",
+            json!({
+                "threadId": journaled["threadId"],
+                "clientUserMessageId": journaled["clientUserMessageId"],
+                "input": journaled["input"],
+            }),
+            true,
+        ),
+    };
 
     let id = intent.operation.request;
     let captured = intent.clone();
     let journal = store.clone();
     let thread = prepared.thread.clone();
-    let payload = request.clone();
     let captured_checkout = checkout.clone();
     let write = tokio::task::spawn_blocking(move || {
         journal.reserve_submission(JournalEntry {
@@ -222,9 +308,10 @@ async fn dispatch(
             thread: &thread,
             draft: captured.draft.id,
             revision: captured.draft.revision,
-            request: &payload,
+            request: &journaled,
             attachments: &captured.draft.attachments,
             checkout: &captured_checkout,
+            queue_add,
         })
     })
     .await??;
@@ -239,7 +326,7 @@ async fn dispatch(
         .await??;
         client
             .request_scoped(
-                "turn/start",
+                method,
                 request,
                 timeout,
                 checkout.clone(),

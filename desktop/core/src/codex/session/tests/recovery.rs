@@ -39,6 +39,7 @@ fn seed(path: &Path, checkout: &CheckoutIdentity, index: u128, dispatched: bool)
         request: &json!({"cwd": checkout.canonical_path(), "clientUserMessageId": id.0.to_string()}),
         attachments: &attachment,
         checkout,
+        queue_add: false,
     }).unwrap();
     if dispatched {
         store
