@@ -74,14 +74,20 @@ async function verifyTurnRail(visible: () => WorkspaceSnapshot | null) {
   if (!viewport || !hover || !delayed || !jump || visible()?.transcript.items.some((row) => row.turnId === 'older-fixture-03')) {
     throw new Error('The first rail target must be outside the loaded transcript');
   }
-  const before = viewport.scrollTop;
+  const viewportTop = viewport.getBoundingClientRect().top;
+  const before = [...viewport.querySelectorAll<HTMLElement>('[data-transcript-slot]')].find((row) =>
+    row.getBoundingClientRect().bottom > viewportTop + 1);
+  if (!before) throw new Error('No transcript row was visible before preview');
+  const offset = before.getBoundingClientRect().top - viewportTop;
   const rows = visible()!.transcript.items.map((row) => row.itemId).join('\n');
   hover.dispatchEvent(new MouseEvent('mouseenter'));
   await waitFor('The separate turn preview did not show the first and last text', () => {
     const preview = document.querySelector('.turn-rail-preview')?.textContent;
     return !!preview?.includes('A saved long turn') && preview.includes('Saved history page fixture 03');
   });
-  if (viewport.scrollTop !== before || visible()?.transcript.items.map((row) => row.itemId).join('\n') !== rows) {
+  const after = before.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  if (!before.isConnected || Math.abs(after - offset) > 1 ||
+      visible()?.transcript.items.map((row) => row.itemId).join('\n') !== rows) {
     throw new Error('The hover preview changed the transcript position or resident rows');
   }
   delayed.dispatchEvent(new MouseEvent('mouseenter'));
