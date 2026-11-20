@@ -9,6 +9,7 @@
   let diagramUrl = $state<string>();
   let diagramLoaded = $state(false);
   let acceptDiagram: (() => void) | undefined;
+  let discardDiagram: (() => void) | undefined;
 
   function prepare(node: HTMLElement) {
     const lifetime = new AbortController();
@@ -22,6 +23,7 @@
         if (!result || lifetime.signal.aborted) return;
         objectUrl = URL.createObjectURL(result);
         acceptDiagram = () => preserveMarkdownSelection(target, lifetime.signal, () => { diagramLoaded = true; });
+        discardDiagram = () => { releaseImage(); diagramUrl = undefined; };
         diagramUrl = objectUrl;
       } else {
         const { formula } = await import('./markdownFormula');
@@ -41,6 +43,7 @@
       lifetime.abort();
       releaseImage();
       acceptDiagram = undefined;
+      discardDiagram = undefined;
     } };
   }
 </script>
@@ -49,10 +52,7 @@
   <div class="markdown-diagram" use:prepare>
     {#if diagramUrl}
       <img src={diagramUrl} alt="Mermaid diagram" hidden={!diagramLoaded}
-        onload={() => acceptDiagram?.()} onerror={() => {
-          if (diagramUrl) URL.revokeObjectURL(diagramUrl);
-          diagramUrl = undefined;
-        }} />
+        onload={() => acceptDiagram?.()} onerror={() => discardDiagram?.()} />
     {/if}
     {#if !diagramLoaded}<pre><code data-language="mermaid">{fallback}</code></pre>{/if}
   </div>
