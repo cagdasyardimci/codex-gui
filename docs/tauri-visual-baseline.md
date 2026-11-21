@@ -15,6 +15,18 @@ The composer resolved to `.SF NS` at 14 pt with optical-size axis 17 and weight 
 
 Match the Mac workspace’s sidebar organization, transcript rhythm, composer and action strip, pinned summary and tools layout, and the visual relationships and focus behavior of shared menus and Settings. Use the reference captures alongside the [Swift regression routes](tauri-regression-evidence.md) to qualify matching surfaces as their owners land. Native title bars, window controls, file pickers, system permissions, clipboard, fullscreen, IME, and accessibility follow platform conventions. Match the user workflow across platforms while recording the differences introduced by native controls.
 
+## Repeatable paired capture
+
+Build the pinned Swift bundle with full Xcode and install or mount the Tauri beta from the revision being compared. On an unlocked Mac, use Peekaboo with Screen Recording and Accessibility access. The fixture launches both binaries separately with disposable GUI data, checkouts and mock backend state. It uses the real app controls and captures the fixture window and its permission menu or search presentation. Keep the mouse and keyboard available for this run. [Native QA setup](native-qa.md#xcode-launched-app-workflow) · [Tauri package setup](desktop-packaging.md)
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer python3 desktop/fixtures/verify_visual_parity.py <swift-app> <installed-tauri-app> <new-evidence-directory> --repeat 2 --timing
+```
+
+Review the rendered captures together with the per-window measurements and operation receipts. The [case catalog](../desktop/fixtures/visual-parity-cases.json) supplies case IDs, applicability, owning checkpoints, and timing budgets. The [evidence records](tauri-regression-evidence.md#evidence-records) define how to attach the outcomes. Keep a case open until every applicable criterion has current evidence or an explicit decision on an observed deviation.
+
+The timing mode records displayed frames of each fixture window through ScreenCaptureKit, along with the native input timestamps on the same host clock. Keep the frame and input records together and repeat the same host, fixture workload, renderer and sample count at C145. Check the streaming draft, active tool and selected diff before interpreting their samples. Compare the slowest input-to-paint sample and the 95th percentile of the changed-frame intervals against their respective budgets. [ScreenCaptureKit frame timestamps](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)
+
 ## Asset disposition
 
 | Asset | Release treatment |
@@ -25,6 +37,6 @@ Match the Mac workspace’s sidebar organization, transcript rhythm, composer an
 | Markdown, math, diagram and code resources | Preserve offline behavior and ship the notices for the chosen JS runtime, syntax assets and KaTeX fonts. Use the owning resource guide for provenance and rebuild steps. [Markdown resources](markdown-resources.md) |
 | Settings title | Use Inter Semibold v4.1 as the redistributable Tauri face and keep its SIL OFL 1.1 notice with the bundle. Exclude the locally licensed OpenAI Sans font bytes from the Tauri resources. [Inter release](https://github.com/rsms/inter/releases/tag/v4.1) · [Inter license](https://github.com/rsms/inter/blob/v4.1/LICENSE.txt) · [AppKit typography](interface-styling.md) |
 
-CoreText measured the two Settings faces at 18 pt. The advance for “Settings” was 70.47 pt in OpenAI Sans and 71.81 pt in Inter. Inter’s widest change among “Settings,” “Appearance,” and “Notifications” was 4.87 pt. Its 21.78 pt typographic line fits the reference’s 24 pt line box. Confirm installed title fit with the final shared Settings controls at C110.
+CoreText measured the two Settings faces at 18 pt. The advance for “Settings” was 70.47 pt in OpenAI Sans and 71.81 pt in Inter. Inter’s widest change among “Settings,” “Appearance,” and “Notifications” was 4.87 pt. Its 21.78 pt typographic line fits the reference’s 24 pt line box. Confirm installed title fit with the final shared Settings controls at C141.
 
-The C110 installed WebView fixture on the same macOS build measured the loaded Inter Settings title at 71.81 × 23.94 CSS pixels. It compares the default Light workspace text against the archived sRGB value and checks the independent Dark palette. The workspace sidebar adapts the appearance preference to its WebView surface tint. Menus and window chrome follow the host platform. The matched workspace screenshots and native interaction outcomes belong to the [release acceptance pass](validation.md#native-and-live-acceptance).
+The [installed appearance probe](../desktop/fixtures/verify_appearance_fixture.py) checks Settings typography and independently verifies the Light and Dark preferences. The workspace sidebar adapts the appearance preference to its WebView surface tint. Review the integrated case matrix before release signing. Repeat the applicable visual checks on the exact [release artifacts](validation.md#native-and-live-acceptance).

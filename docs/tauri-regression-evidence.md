@@ -11,7 +11,7 @@ Use the pinned Swift revision in the [parity baseline](tauri-parity.md). For eac
 | `CodexClient/AppServer/AppServerAutomaticTitleTests.swift`, `CodexClient/Decoding/AutomaticTitleResponseTests.swift` | C93. Portable title response and captured chat tests. |
 | `CodexClient/AppServer/AppServerFeedbackTests.swift`, `Application/Reducers/ResultFeedback/*` | C96. Portable fixture checks eligibility, exact turn, logs exclusion and uncertain outcome. |
 | `CodexClient/AppServer/AppServerQueueTests.swift`, `Application/Runtime/Conversation/*Queue*Tests.swift`, `Persistence/ComposerQueueStorageTests.swift` | C34–C35, C51–C58. Fixture backend and database verify queue authority, receipts, sequencing, mutation isolation and paused restore. |
-| `CodexClient/AppServer/AppServerRemoteAccessTests.swift`, `CodexClient/Diagnostics/RemoteControlDiagnosticsTests.swift`, `Application/Reducers/RemoteAccess/*`, `Features/RemoteAccess/*` | C119–C120. Relay fixture and installed Settings route prove workspace ownership, pairing, revocation and reconnect. Actual relay and device acceptance belongs to C129. |
+| `CodexClient/AppServer/AppServerRemoteAccessTests.swift`, `CodexClient/Diagnostics/RemoteControlDiagnosticsTests.swift`, `Application/Reducers/RemoteAccess/*`, `Features/RemoteAccess/*` | C119–C120. Relay fixture and installed Settings route prove workspace ownership, pairing, revocation and reconnect. Actual relay and device acceptance belongs to C150. |
 | `CodexClient/AppServer/AppServerVoiceChatTests.swift`, `Application/Runtime/VoiceChatRuntimeTests.swift`, `Application/Presentation/VoiceChatTranscriptTests.swift`, `Features/Settings/Pages/SettingsVoicePageTests.swift` | C112–C116. Realtime fixture and synthetic media verify chat ownership, settings preview, transcript history and coding handoff. |
 | `CodexClient/AppServer/AppServerReadAloudTests.swift`, `Application/Reducers/ReadAloud/*`, `Application/Runtime/ReadAloud*Tests.swift` | C113, C117. Synthetic speech verifies playback controls, failures, retirement and owner reuse. |
 | `CodexClient/AppServer/AppServerConfiguredDefaultsTests.swift`, `Application/Reducers/Preferences/*`, `Persistence/ReasoningEffortVisibilityTests.swift` | C83, C105–C106. Fixture separates saved preferences from effective policy, capability and next-turn state. |
@@ -43,7 +43,7 @@ Use the pinned Swift revision in the [parity baseline](tauri-parity.md). For eac
 | `App/Diagnostics/UITestUIEvidenceTests.swift` | C37–C38. Swift reference evidence checks capture content and bounds. |
 | `App/Diagnostics/StatusPopoverViewTests.swift` | C38, C110. Preserve the AppKit capture as reference-only evidence for its status popover. Verify the Tauri controls under the UI-copy rules. |
 | `App/GitReview/*`, `Features/Changes/*` | C68–C70, C103–C104. Verify actual compared content, unified/split Changes, jump, hover, exact exports and editor handoff. |
-| `App/Notifications/*`, `Features/Settings/Pages/SettingsNotificationControlsTests.swift` | C111. Verify notification routing and sound selection with installed fixtures. Actual receipt, sound and permissions belong to C129–C130. |
+| `App/Notifications/*`, `Features/Settings/Pages/SettingsNotificationControlsTests.swift` | C111. Verify notification routing and sound selection with installed fixtures. Actual receipt, sound and permissions belong to C150–C151. |
 | `App/Tools/*`, `App/WindowLayout/*`, `App/Windows/TaskWorkspace*Tests.swift` | C44, C64–C66, C97, C103, C110. Verify per-chat tools adoption, window and modal ownership, split panes and restoration. |
 | `App/Design/*`, `App/Windows/*` | C38, C44, C73–C76, C110. Use AppKit-only layout cases for reference measurements and installed Tauri checks for observable presentation and interaction. |
 | `Features/Conversation/Composer/*Queue*Tests.swift` | C57. Installed queue controls verify addressed row, edit state, hover, ordering and explicit Resume. |
@@ -55,7 +55,7 @@ Use the pinned Swift revision in the [parity baseline](tauri-parity.md). For eac
 | `Features/Settings/Browser/*`, `Features/Settings/Management/*` | C109. Verify forms, scoped site actions, policies and preserving failed drafts. |
 | `Features/Settings/Usage/*`, `Features/Usage/*` | C105, C108. Verify missing and zero usage, eligibility, account identity and expired credits. |
 | `Features/Settings/Pages/SettingsConfigurationPageTests.swift`, `Features/Settings/SettingsBackendTests.swift` | C105–C107. Verify capability and settings writes, policy, refresh and hidden view retirement. |
-| `Features/Settings/*`, `UI/Color/*`, `UI/Typography/*` | C38, C110, C130. Check appearance, search navigation, typography and resolved colors on installed surfaces. Keep Cocoa-specific styling assertions as Swift reference cases. |
+| `Features/Settings/*`, `UI/Color/*`, `UI/Typography/*` | C38, C110, C126–C146 and C151. Check appearance, search navigation, typography and resolved colors on installed surfaces. Keep Cocoa-specific styling assertions as Swift reference cases. |
 | `UI/Components/Output/*` | C73, C77. Compare rendered output and exact copy text from portable content fixtures. |
 | `UI/Components/Search/*` | C89, C92, C98–C99. Verify query, key navigation, panel lifetime and focus return in the installed app. |
 | `UI/Components/*` | C38, C44, C47, C110. Use Swift control-specific assertions for reference and verify matching Tauri behavior, geometry and keyboard/focus where applicable. |
@@ -70,7 +70,7 @@ The [native harness](native-qa.md#xcode-launched-app-workflow) owns the Swift la
 | Swift scenario | Tauri checkpoint and evidence |
 | --- | --- |
 | `testSendStreamingMessageAndStop` and its compact variant | C44, C47, C50, C110. Installed fixture covers the picker, Send, interrupt, retained content and native compact layout. |
-| `testComponentsInLightAppearance` and `testComponentsInDarkAppearance` | C38, C89, C97–C103, C110. Pair captures for the conversation, keyboard chooser and presented panels against the same fixture and window size. Verify the focus-return assertions in the installed app. |
+| `testComponentsInLightAppearance` and `testComponentsInDarkAppearance` | C38, C89, C97–C103, C110 and C126–C146. Pair captures for the conversation, keyboard chooser and presented panels against the same fixture and window size. Verify the focus-return assertions in the installed app. |
 | `streaming` | C16, C43, C47, C50. Compare exact ordered deltas and stop completion on mounted views. |
 | `concurrent-streaming` | C26, C31–C35, C43, C47, C50. Verify captured owner and independent hidden streams with a separate checkout and backend trace. |
 | `questions` | C31, C47, C50, C118. Exercise question identity, ordered answers, hidden prompts and captured dictation. |

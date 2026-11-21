@@ -98,6 +98,7 @@ fn main() {
     let verification = match mode.as_deref().and_then(|value| value.to_str()) {
         Some("--verify-fixture") => fixture::Verification::Streaming,
         Some("--verify-media") => fixture::Verification::Media,
+        Some("--visual-parity-fixture") => fixture::Verification::VisualParity,
         Some("--verify-history") => fixture::Verification::History,
         Some("--verify-history-restore") => fixture::Verification::HistoryRestore,
         Some("--verify-managed-worktree") => fixture::Verification::ManagedWorktree,
@@ -154,7 +155,8 @@ fn main() {
     };
     let desktop_fixture = matches!(
         verification,
-        fixture::Verification::History
+        fixture::Verification::VisualParity
+            | fixture::Verification::History
             | fixture::Verification::HistoryRestore
             | fixture::Verification::ManagedWorktree
             | fixture::Verification::Attachments
@@ -211,6 +213,7 @@ fn main() {
     let handle_desktop_quit = matches!(
         verification,
         fixture::Verification::None
+            | fixture::Verification::VisualParity
             | fixture::Verification::Quit
             | fixture::Verification::FileTools
     );

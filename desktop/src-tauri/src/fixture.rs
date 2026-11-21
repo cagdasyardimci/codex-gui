@@ -30,6 +30,7 @@ pub enum Verification {
     None,
     Streaming,
     Media,
+    VisualParity,
     History,
     HistoryRestore,
     Attachments,

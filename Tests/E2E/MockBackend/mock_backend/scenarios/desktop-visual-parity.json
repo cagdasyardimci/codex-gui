@@ -1,0 +1,13 @@
+{
+  "extends": "desktop-history",
+  "desktopVisualParity": true,
+  "intervalSeconds": 3,
+  "chunks": [
+    "Paired streaming response.",
+    "\n\nA project inspection is underway.",
+    "\n\nReading the first section.",
+    "\n\nReading the second section.",
+    "\n\nReviewing the changes.",
+    "\n\nA final fixture paragraph."
+  ]
+}

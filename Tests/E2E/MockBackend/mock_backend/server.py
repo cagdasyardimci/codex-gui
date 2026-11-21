@@ -154,6 +154,11 @@ class Server:
                 if self.scenario.get('desktopSlash'):
                     alternative['serviceTiers'].append({'id': 'priority', 'name': 'Fast'})
                 return {'data': [baseline, alternative], 'nextCursor': None}
+            if self.scenario.get('desktopVisualParity'):
+                model = self.desktop_model('qa-model', False)
+                model.update(displayName='QA fixture model', defaultReasoningEffort='medium',
+                             supportedReasoningEfforts=[{'reasoningEffort': 'medium', 'description': 'Medium'}])
+                return {'data': [model], 'nextCursor': None}
             if self.scenario.get('desktopHistory'):
                 return {'data': [self.desktop_model('fixture-default', False)], 'nextCursor': None}
             return {'data': [{'id': 'qa-model', 'model': 'qa-model', 'displayName': 'QA fixture model',

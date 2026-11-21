@@ -9,7 +9,7 @@
 
   let text = $state('');
   let transcript = $state<HTMLPreElement>();
-  type Mode = 'none' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'managedWorktree' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'appKitImport' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
+  type Mode = 'none' | 'visualParity' | 'streaming' | 'media' | 'history' | 'historyRestore' | 'attachments' | 'managedWorktree' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'appKitImport' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit';
   let mode = $state<Mode | null>(null);
 
   async function workspaceScopeVerified(): Promise<boolean> {
@@ -70,7 +70,7 @@
   });
 </script>
 
-{#if mode === 'none'}
+{#if mode === 'none' || mode === 'visualParity'}
   <WorkspaceShell />
 {:else if mode === 'history'}
   <WorkspaceShell verify="initial" />
