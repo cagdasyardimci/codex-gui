@@ -15,6 +15,12 @@ The composer resolved to `.SF NS` at 14 pt with optical-size axis 17 and weight 
 
 Match the Mac workspace’s sidebar organization, transcript rhythm, composer and action strip, pinned summary and tools layout, and the visual relationships and focus behavior of shared menus and Settings. Use the reference captures alongside the [Swift regression routes](tauri-regression-evidence.md) to qualify matching surfaces as their owners land. Native title bars, window controls, file pickers, system permissions, clipboard, fullscreen, IME, and accessibility follow platform conventions. Match the user workflow across platforms while recording the differences introduced by native controls.
 
+## Verification schedule
+
+Verify the paired capture route on the current Apple Silicon Mac at C127. Run the relevant installed fixture and paired visual checks on that Mac for each individual visual implementation commit. Record open desktop and signing dependencies with their owner and owning checkpoint. Keep the [desktop CI](desktop-packaging.md#support-and-ownership) build and fixture checks running on their configured hosts.
+
+Run the installed Windows 11 x64 and Ubuntu 24.04 desktop matrix at C144. Run the macOS 14 native-sensitive cases at C146. Close the integrated visual gate with those results and the current Mac evidence before qualifying release packages. Sign and qualify the packages with the applicable desktop and signing access at C147–C149. [Package requirements](desktop-packaging.md#support-and-ownership)
+
 ## Repeatable paired capture
 
 Build the pinned Swift bundle with full Xcode and install or mount the Tauri beta from the revision being compared. On an unlocked Mac, use Peekaboo with Screen Recording and Accessibility access. The fixture launches both binaries separately with disposable GUI data, checkouts and mock backend state. It uses the real app controls and captures the fixture window and its permission menu or search presentation. Keep the mouse and keyboard available for this run. [Native QA setup](native-qa.md#xcode-launched-app-workflow) · [Tauri package setup](desktop-packaging.md)
