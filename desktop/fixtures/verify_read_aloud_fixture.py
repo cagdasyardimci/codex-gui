@@ -49,19 +49,20 @@ def main():
         print(result.stdout, end="")
         prefix = "Verified installed desktop voice: "
         summaries = [json.loads(line.removeprefix(prefix)) for line in result.stdout.splitlines() if line.startswith(prefix)]
+        requests = sorted(
+            (row for part in root.glob(f"{trace.name}.*")
+             for line in part.read_text(encoding="utf-8").splitlines()
+             if (row := json.loads(line))["direction"] == "request"),
+            key=lambda row: row["time"],
+        )
         if result.returncode or len(summaries) != 1:
-            if trace.exists():
-                requests = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
-                print("Last fixture requests:", [(row.get("method"), row.get("params"))
-                                                for row in requests if row["direction"] == "request"][-20:])
+            print("Last fixture requests:", [(row["method"], row["params"]) for row in requests[-20:]])
             raise SystemExit(result.stderr or "The installed Read Aloud fixture did not finish")
         (summary,) = summaries
         assert summary["failed"]["frames"] == 0
         groups = {}
-        for line in trace.read_text(encoding="utf-8").splitlines():
-            row = json.loads(line)
-            if row["direction"] == "request":
-                groups.setdefault(row["method"], []).append(row["params"])
+        for row in requests:
+            groups.setdefault(row["method"], []).append(row["params"])
         private = {entry["realtimeSessionId"]: entry for entry in groups["thread/realtime/start"]}
         assert set(private) == {entry["id"] for entry in summary.values()}
         threads_started = {entry["threadId"] for entry in private.values()}

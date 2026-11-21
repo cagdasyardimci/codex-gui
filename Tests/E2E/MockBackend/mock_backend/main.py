@@ -47,6 +47,7 @@ def main():
         state_path += '.other'
     trace_path = os.environ.get('CODEX_GUI_QA_TRACE')
     separate_trace = (scenario.get('desktopRelayHost') or scenario.get('desktopAutomaticTitles')
+                      or scenario.get('desktopReadAloud')
                       or (scenario.get('desktopQuit') and secondary))
     if trace_path and separate_trace:
         trace_path = f'{trace_path}.{os.getpid()}'
