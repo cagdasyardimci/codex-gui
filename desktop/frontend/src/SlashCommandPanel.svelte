@@ -102,8 +102,7 @@
 </dialog>
 
 <style>
-  dialog { background: Canvas; color: CanvasText; max-width: min(34rem, 80vw); border: 1px solid var(--workspace-divider);
-    border-radius: 0.5rem; padding: 1rem; }
+  dialog { max-width: min(34rem, 80vw); }
   header { display: flex; justify-content: space-between; align-items: center; gap: 1.25rem; margin-bottom: 0.65rem; }
   h2 { font-size: 1rem; margin: 0; }
   .choices { display: grid; gap: 0.35rem; max-height: 50vh; overflow: auto; }

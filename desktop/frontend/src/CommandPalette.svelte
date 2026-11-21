@@ -73,7 +73,7 @@
   oncancel={(event) => { event.preventDefault(); if (!composing) close(); }}>
   <h2>{title}</h2>
   <!-- svelte-ignore a11y_autofocus (Opening the dialog directs typing to its search field.) -->
-  <input type="search" role="combobox" aria-label={fieldName} aria-expanded={results.length > 0} autofocus
+  <input class="control-compact" type="search" role="combobox" aria-label={fieldName} aria-expanded={results.length > 0} autofocus
     aria-controls="palette-results" aria-autocomplete="list"
     aria-activedescendant={results.length ? `palette-result-${highlighted}` : undefined}
     bind:this={search} bind:value={query} oninput={() => { row = 0; }}
@@ -91,13 +91,11 @@
 </dialog>
 
 <style>
-  dialog { color: CanvasText; background: Canvas; border: 1px solid var(--workspace-divider); border-radius: 0.65rem;
-    inline-size: min(37rem, 86vw); max-block-size: 74vh; padding: 1rem; }
+  dialog { inline-size: min(37rem, 86vw); max-block-size: 74vh; }
   h2 { margin: 0 0 0.65rem; font-size: 1rem; }
-  input { box-sizing: border-box; width: 100%; font: inherit; padding: 0.45rem; }
+  input { width: 100%; }
   [role="listbox"] { display: grid; gap: 0.22rem; margin-block: 0.6rem; max-block-size: 48vh; overflow: auto; }
   [role="option"] { display: grid; gap: 0.2rem; overflow: hidden; }
-  [role="option"][aria-selected="true"] { background: var(--workspace-hover); }
   .palette-detail { font-size: 0.88em; overflow-wrap: anywhere; }
   .palette-close { display: block; margin-inline-start: auto; }
 </style>

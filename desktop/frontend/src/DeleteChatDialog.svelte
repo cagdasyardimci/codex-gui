@@ -27,8 +27,7 @@
 </dialog>
 
 <style>
-  dialog { background: Canvas; color: CanvasText; border: 1px solid var(--workspace-divider);
-    border-radius: 0.55rem; max-inline-size: min(30rem, 80vw); overflow-wrap: anywhere; }
+  dialog { max-inline-size: min(30rem, 80vw); overflow-wrap: anywhere; }
   h2 { margin: 0; font-size: 1rem; }
   footer { display: flex; justify-content: flex-end; gap: 0.5rem; }
 </style>

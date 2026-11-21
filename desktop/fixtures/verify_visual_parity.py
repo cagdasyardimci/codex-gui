@@ -110,7 +110,7 @@ def executable(bundle):
 
 
 @contextmanager
-def fixture_app(bundle, directory, project, edition):
+def fixture_app(bundle, directory, project, edition, appearance="light"):
     folders = {name: directory / name for name in ("codex", "support", "workspaces")}
     for folder in folders.values():
         folder.mkdir()
@@ -131,11 +131,11 @@ def fixture_app(bundle, directory, project, edition):
         subprocess.run(["defaults", "write", suite, "CodexGUI.selectedThreads", "-dict", project, CHAT], check=True)
         environment.update({
             "CODEX_GUI_PREFERENCES_SUITE": suite, "CODEX_GUI_SUPPORT_ROOT": str(folders["support"]),
-            "CODEX_GUI_WORKSPACE_ROOT": str(folders["workspaces"]), "CODEX_GUI_E2E_APPEARANCE": "Light",
+            "CODEX_GUI_WORKSPACE_ROOT": str(folders["workspaces"]), "CODEX_GUI_E2E_APPEARANCE": appearance.title(),
             "CODEX_GUI_E2E_STATE": str(directory / "swift-state.json"),
         })
     else:
-        write(folders["support"] / "presentation.json", {"appearance": {"mode": "light"}})
+        write(folders["support"] / "presentation.json", {"appearance": {"mode": appearance}})
         arguments += ["--visual-parity-fixture", folders["support"], project]
     with (directory / "app.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(arguments, env=environment, stdout=log, stderr=subprocess.STDOUT)
@@ -213,8 +213,8 @@ def is_streaming(directory):
     return thread["turns"][-1]["status"] == "inProgress"
 
 
-def capture(bundle, directory, project, edition, evidence_helper):
-    with fixture_app(bundle, directory, project, edition) as process:
+def capture(bundle, directory, project, edition, evidence_helper, appearance):
+    with fixture_app(bundle, directory, project, edition, appearance) as process:
         window_id, ready = open_workspace(directory, process, edition)
         editor = editor_in(ready, edition)
         anchor = node(ready, "Approval policy:" if edition == "swift" else "Permissions", "button")
@@ -299,8 +299,8 @@ def sampled_action(directory, case, evidence_helper, process, window_id, region,
     return result
 
 
-def timing(bundle, directory, project, edition, evidence_helper):
-    with fixture_app(bundle, directory, project, edition) as process:
+def timing(bundle, directory, project, edition, evidence_helper, appearance):
+    with fixture_app(bundle, directory, project, edition, appearance) as process:
         window_id, ready = open_workspace(directory, process, edition)
         active = stream_fixture(directory, window_id, ready, edition, project)
         editor = editor_in(active, edition)
@@ -379,6 +379,7 @@ def main():
     parser.add_argument("tauri_app", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--repeat", type=int, default=2)
+    parser.add_argument("--appearance", choices=("light", "dark"), default="light")
     parser.add_argument("--timing", action="store_true")
     args = parser.parse_args()
     if args.repeat < 1:
@@ -391,6 +392,7 @@ def main():
                     Path(__file__).with_name("macos_visual_evidence.swift"), "-o", evidence_helper], check=True)
     evidence = {
         "kind": "installed apps with an isolated simulated backend and native input",
+        "appearance": args.appearance,
         "macOS": subprocess.check_output(["sw_vers"], text=True),
         "executables": {name: hashlib.sha256(executable(path).read_bytes()).hexdigest() for name, path in bundles.items()},
         "runs": [],
@@ -403,12 +405,12 @@ def main():
         for edition, bundle in bundles.items():
             results = directory / edition
             results.mkdir()
-            pair[edition] = capture(bundle, results, project, edition, evidence_helper)
+            pair[edition] = capture(bundle, results, project, edition, evidence_helper, args.appearance)
             print(f"Captured {edition} pair {index}: permission menu, streaming turn and focused search", flush=True)
             if args.timing:
                 samples = directory / f"{edition}-timing"
                 samples.mkdir()
-                pair[edition]["timing"] = timing(bundle, samples, project, edition, evidence_helper)
+                pair[edition]["timing"] = timing(bundle, samples, project, edition, evidence_helper, args.appearance)
         assert pair["swift"]["windowBounds"] == pair["tauri"]["windowBounds"]
         assert pair["swift"]["nativeDisplayScale"] == pair["tauri"]["nativeDisplayScale"]
         evidence["runs"].append(pair)

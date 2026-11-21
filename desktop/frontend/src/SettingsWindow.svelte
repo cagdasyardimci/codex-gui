@@ -461,13 +461,11 @@
     font-weight: 600;
     font-display: swap;
   }
-  dialog { background: var(--workspace-canvas); color: var(--workspace-text); inline-size: min(42rem, 86vw); min-block-size: 17rem; max-block-size: 80vh;
-    border: 1px solid var(--workspace-divider); border-radius: 0.6rem; padding: 1rem; }
+  dialog { inline-size: min(42rem, 86vw); min-block-size: 17rem; max-block-size: 80vh; }
   header, nav, .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; }
   header { justify-content: space-between; }
   h2 { margin: 0; font: 600 calc(var(--workspace-ui-size, 14px) + 4px) / 1.33 var(--workspace-ui-font, "Settings Inter"), system-ui, sans-serif; }
   nav { margin-block: 1rem 0.7rem; padding-block-end: 0.5rem; border-block-end: 1px solid var(--workspace-divider); }
-  nav button[aria-pressed="true"] { background: color-mix(in srgb, CanvasText 15%, Canvas); }
   dl { display: grid; grid-template-columns: minmax(10rem, max-content) 1fr; gap: 0.5rem 0.85rem; }
   dd { margin: 0; overflow-wrap: anywhere; }
   .limits dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }

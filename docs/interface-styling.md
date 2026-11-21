@@ -20,6 +20,8 @@ The Settings shell title uses a locally licensed OpenAI Sans Semibold face. Its 
 
 Choose token roles by purpose: equal values do not establish a shared design rule. Compute derived relationships rather than maintaining independent copies. Keep shape and layout responsibilities separate, and leave artwork coordinates, native metrics and operational tolerances with their owners unless they represent shared design decisions. Pure layout helpers consume measured inputs rather than measuring native views or fonts.
 
+The Tauri workspace uses [shared control styles](../desktop/frontend/src/desktop-controls.css) for app-owned buttons, fields, focus indicators, menus and dialog surfaces. Adapt their paint and typography through the active appearance profile so custom colors and fonts reach the same controls as the default appearances. Feature components own placement and action state. Keep browser and OS input semantics for native pickers and controls. Measure representative rendered states in both appearances using the [paired capture procedure](tauri-visual-baseline.md#repeatable-paired-capture).
+
 Menu row geometry retains a minimum interaction target; native fields also reserve the selected face’s glyph height. [Action menus](../Sources/CodexGUI/UI/Components/Controls/DesktopActionMenu.swift) preserve selection and focus while their presentation resizes.
 
 Validate configuration fit separately from available-space behavior. A valid configuration still needs truncation, reflow, scrolling or collapse when space shrinks. Measure in the component's coordinate space; a clipped viewport, intrinsic request and final frame can differ.

@@ -1,0 +1,109 @@
+:root {
+  --control-height: 32px;
+  --control-compact-height: 24px;
+  --control-icon-size: 30px;
+  --control-artwork-size: 16px;
+  --control-inset: 10px;
+  --control-gap: 6px;
+  --control-radius: 10px;
+  --control-type: 400 var(--workspace-ui-size, 14px) / 1.2 var(--workspace-ui-font, system-ui), sans-serif;
+  --control-outline-width: 2px;
+  --control-outline-offset: 1px;
+  --control-field: var(--workspace-canvas);
+  --control-raised: color-mix(in srgb, var(--workspace-text) 3%, var(--workspace-canvas));
+  --control-hover: var(--workspace-hover);
+  --control-pressed: color-mix(in srgb, var(--workspace-text) 16%, var(--workspace-canvas));
+  --control-muted: color-mix(in srgb, var(--workspace-text) 46%, var(--workspace-canvas));
+  --overlay-radius: 20px;
+  --overlay-inset: 16px;
+  --overlay-surface: var(--workspace-canvas);
+  --overlay-border: 1px solid var(--workspace-divider);
+  --overlay-shadow: 0 8px 28px rgb(0 0 0 / 22%), 0 2px 8px rgb(0 0 0 / 14%);
+}
+
+.workspace :is(button, textarea, input:where(:not([type]), [type="text"], [type="search"], [type="password"], [type="url"], [type="number"])) {
+  box-sizing: border-box;
+  font: var(--control-type);
+  color: inherit;
+  background: var(--control-field);
+  border: 1px solid var(--workspace-divider);
+  border-radius: var(--control-radius);
+}
+
+.workspace :is(button, textarea, input, select, summary):focus-visible {
+  outline: var(--control-outline-width) solid var(--workspace-focus);
+  outline-offset: var(--control-outline-offset);
+}
+
+.workspace :is(button, input:where(:not([type]), [type="text"], [type="search"], [type="password"], [type="url"], [type="number"])) {
+  min-block-size: var(--control-height);
+  padding: 4px var(--control-inset);
+}
+
+.workspace input[type="search"] {
+  appearance: none;
+}
+
+.workspace .control-compact {
+  min-block-size: var(--control-compact-height);
+  padding-block: 2px;
+}
+
+.workspace button {
+  text-align: start;
+  background: var(--control-raised);
+}
+
+.workspace button:enabled:hover,
+.workspace button:is([aria-current="true"], [aria-selected="true"], [aria-pressed="true"]),
+.workspace details[open] > .control-icon,
+.workspace .control-icon:hover {
+  background: var(--control-hover);
+}
+
+.workspace button:enabled:active,
+.workspace .control-icon:active {
+  background: var(--control-pressed);
+}
+
+.workspace button:disabled {
+  color: var(--control-muted);
+}
+
+.workspace .control-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--control-icon-size);
+  block-size: var(--control-icon-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  color: inherit;
+  background: transparent;
+  font-size: var(--control-artwork-size);
+  line-height: 1;
+  list-style: none;
+}
+
+.workspace .control-icon::-webkit-details-marker {
+  display: none;
+}
+
+.workspace :where(dialog, .surface-menu) {
+  background: var(--overlay-surface);
+  color: var(--workspace-text);
+  border: var(--overlay-border);
+  border-radius: var(--overlay-radius);
+  box-shadow: var(--overlay-shadow);
+}
+
+.workspace dialog {
+  padding: var(--overlay-inset);
+}
+
+.workspace .surface-menu {
+  display: grid;
+  gap: var(--control-gap);
+  padding: var(--control-gap);
+}

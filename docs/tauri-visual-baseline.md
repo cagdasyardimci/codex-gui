@@ -31,6 +31,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer python3 desktop/fixture
 
 Review the rendered captures together with the per-window measurements and operation receipts. The [case catalog](../desktop/fixtures/visual-parity-cases.json) supplies case IDs, applicability, owning checkpoints, and timing budgets. The [evidence records](tauri-regression-evidence.md#evidence-records) define how to attach the outcomes. Keep a case open until every applicable criterion has current evidence or an explicit decision on an observed deviation.
 
+Pass `--appearance dark` to repeat a paired capture with both fixture editions in Dark. The [installed appearance probe](../desktop/fixtures/verify_appearance_fixture.py) also reports the rendered type, geometry, focus and surface styles for shared Settings controls in each appearance.
+
 The timing mode records displayed frames of each fixture window through ScreenCaptureKit, along with the native input timestamps on the same host clock. Keep the frame and input records together and repeat the same host, fixture workload, renderer and sample count at C145. Check the streaming draft, active tool and selected diff before interpreting their samples. Compare the slowest input-to-paint sample and the 95th percentile of the changed-frame intervals against their respective budgets. [ScreenCaptureKit frame timestamps](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)
 
 ## Asset disposition

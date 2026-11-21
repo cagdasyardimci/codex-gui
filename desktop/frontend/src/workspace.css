@@ -21,33 +21,6 @@ body {
   height: 100dvh;
 }
 
-.workspace :is(button, textarea) {
-  font: inherit;
-  color: inherit;
-  background: var(--workspace-canvas);
-  border: 1px solid var(--workspace-divider);
-  border-radius: 0.45rem;
-}
-
-.workspace :is(button, textarea):focus-visible {
-  outline: 2px solid var(--workspace-focus);
-  outline-offset: 2px;
-}
-
-.workspace button {
-  padding: 0.45rem 0.65rem;
-  text-align: start;
-}
-
-.workspace button:enabled:hover,
-.workspace button[aria-current="true"] {
-  background: var(--workspace-hover);
-}
-
-.workspace button:disabled {
-  opacity: 0.6;
-}
-
 .workspace-header {
   display: flex;
   align-items: center;
@@ -449,14 +422,6 @@ body {
   margin: 0;
   font: var(--workspace-code-size, 12px) / 1.45 var(--workspace-code-font, ui-monospace), monospace;
   tab-size: 4;
-}
-
-.quit-dialog {
-  color: inherit;
-  background: var(--workspace-canvas);
-  border: 1px solid var(--workspace-divider);
-  border-radius: 0.65rem;
-  padding: 1rem;
 }
 
 .quit-dialog::backdrop {

@@ -158,8 +158,7 @@
 </dialog>
 
 <style>
-  dialog { color: CanvasText; background: Canvas; border: 1px solid var(--workspace-divider);
-    border-radius: 0.65rem; inline-size: min(43rem, 86vw); max-block-size: 77vh; padding: 1rem; }
+  dialog { inline-size: min(43rem, 86vw); max-block-size: 77vh; }
   h2, h3 { margin: 0; font-size: 1rem; }
   .filters, header, footer, .archived-chat { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.45rem; }
   .filters { margin-block: 0.7rem; }

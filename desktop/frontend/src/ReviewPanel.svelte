@@ -72,8 +72,7 @@
 </dialog>
 
 <style>
-  dialog { background: Canvas; color: CanvasText; inline-size: min(29rem, 80vw); border: 1px solid var(--workspace-divider);
-    border-radius: 0.5rem; padding: 1rem; }
+  dialog { inline-size: min(29rem, 80vw); }
   form { display: grid; gap: 0.65rem; }
   .controls { display: flex; gap: 0.55rem; flex-wrap: wrap; }
   label { display: grid; gap: 0.25rem; }

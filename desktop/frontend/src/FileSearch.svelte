@@ -138,14 +138,12 @@
 </dialog>
 
 <style>
-  dialog { color: CanvasText; background: Canvas; border: 1px solid var(--workspace-divider); border-radius: 0.65rem;
-    inline-size: min(46rem, 87vw); max-block-size: 75vh; padding: 1rem; }
+  dialog { inline-size: min(46rem, 87vw); max-block-size: 75vh; }
   h2 { margin: 0 0 0.65rem; font-size: 1rem; }
   .inputs { display: grid; grid-template-columns: 2fr 1fr; gap: 0.5rem; }
   label { display: grid; gap: 0.2rem; }
-  input { box-sizing: border-box; min-inline-size: 0; inline-size: 100%; font: inherit; padding: 0.45rem; }
+  input { min-inline-size: 0; inline-size: 100%; }
   [role="listbox"] { display: grid; gap: 0.2rem; max-block-size: 49vh; overflow: auto; margin-block: 0.6rem; }
   [role="option"] { display: grid; gap: 0.15rem; text-align: start; overflow-wrap: anywhere; }
-  [role="option"][aria-selected="true"] { background: var(--workspace-hover); }
   footer { display: flex; justify-content: flex-end; gap: 0.4rem; }
 </style>

@@ -82,7 +82,7 @@
   oncancel={(event) => { event.preventDefault(); if (!composing && !blocked) close(); }}>
   <h2>Search Messages</h2>
   <!-- svelte-ignore a11y_autofocus (Opening the modal directs typing to its search field.) -->
-  <input type="search" role="combobox" aria-label="Search Message Contents" autofocus
+  <input class="control-compact" type="search" role="combobox" aria-label="Search Message Contents" autofocus
     aria-controls="message-search-results" aria-expanded={hits.length > 0} aria-autocomplete="list"
     aria-activedescendant={hits.length ? `message-search-result-${selected}` : undefined}
     bind:this={field} bind:value={query}
@@ -103,12 +103,10 @@
 </dialog>
 
 <style>
-  dialog { background: Canvas; color: CanvasText; border: 1px solid var(--workspace-divider);
-    border-radius: 0.65rem; inline-size: min(46rem, 87vw); max-block-size: 75vh; padding: 1rem; }
+  dialog { inline-size: min(46rem, 87vw); max-block-size: 75vh; }
   h2 { font-size: 1rem; margin: 0 0 0.65rem; }
-  input { font: inherit; box-sizing: border-box; padding: 0.45rem; inline-size: 100%; }
+  input { inline-size: 100%; }
   [role="listbox"] { display: grid; gap: 0.25rem; max-block-size: 53vh; overflow: auto; margin-block: 0.5rem; }
   [role="option"] { display: grid; gap: 0.15rem; overflow-wrap: anywhere; text-align: start; }
-  [aria-selected="true"] { background: var(--workspace-hover); }
   footer { display: flex; justify-content: flex-end; gap: 0.45rem; }
 </style>

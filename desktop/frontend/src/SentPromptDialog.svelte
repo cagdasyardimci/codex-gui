@@ -35,8 +35,7 @@
 </dialog>
 
 <style>
-  dialog { background: Canvas; color: CanvasText; width: min(35rem, 82vw); border-radius: 0.5rem;
-    border: 1px solid var(--workspace-divider); padding: 1rem; }
+  dialog { width: min(35rem, 82vw); }
   h2 { margin: 0; font-size: 1rem; }
   form { display: grid; gap: 0.65rem; }
   textarea { padding: 0.45rem; resize: vertical; }

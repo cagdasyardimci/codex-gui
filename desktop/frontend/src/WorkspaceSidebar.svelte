@@ -152,8 +152,8 @@
     <button class="sidebar-main" type="button" aria-current={view.activeProject === project.id ? 'true' : undefined}
       disabled={blocked} title={project.path} onclick={() => apply({ openProject: project.id })}>{project.title}</button>
     <details class="sidebar-row-menu">
-      <summary aria-label={`Actions for ${project.title}`}>⋯</summary>
-      <div>
+      <summary class="control-icon" aria-label={`Actions for ${project.title}`}>⋯</summary>
+      <div class="surface-menu">
         <button type="button" onclick={(event) => titleEditor({ project }, closeMenu(event))} disabled={blocked}>Rename Project</button>
         <button type="button" onclick={(event) => {
           closeMenu(event);
@@ -178,8 +178,8 @@
       {#if chat.preview && chat.preview !== chat.title}<span class="chat-preview" title={chat.preview}>{chat.preview}</span>{/if}
     </button>
     <details class="sidebar-row-menu">
-      <summary aria-label={`Actions for ${chat.title}`}>⋯</summary>
-      <div>
+      <summary class="control-icon" aria-label={`Actions for ${chat.title}`}>⋯</summary>
+      <div class="surface-menu">
         {#if view.activeProject === chat.key.projectId}
           <button type="button" onclick={(event) => titleEditor({ chat }, closeMenu(event))} disabled={blocked}>Rename Chat</button>
         {/if}
@@ -283,10 +283,8 @@
   .unread .chat-title { font-weight: 700; }
   .sidebar-options { margin-block-end: 0.25rem; }
   .sidebar-options label { display: grid; justify-content: start; margin-block-start: 0.35rem; }
-  .sidebar-row-menu summary { cursor: pointer; padding: 0.35rem; list-style: none; }
-  .sidebar-row-menu > div { display: grid; gap: 0.25rem; position: absolute; z-index: 1;
-    padding: 0.3rem; background: Canvas; border: 1px solid var(--workspace-divider); border-radius: 0.45rem; }
-  dialog { background: Canvas; color: CanvasText; border: 1px solid var(--workspace-divider); border-radius: 0.5rem; }
+  .sidebar-row-menu summary { cursor: pointer; }
+  .sidebar-row-menu > div { position: absolute; z-index: 1; }
   form { display: grid; gap: 0.65rem; }
   form > div { display: flex; justify-content: flex-end; gap: 0.45rem; }
   form input { margin-inline-start: 0.5rem; }

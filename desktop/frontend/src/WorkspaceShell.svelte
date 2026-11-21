@@ -73,6 +73,7 @@
   import { verifyFileTools } from './fileToolsProbe';
   import { verifyFeedback } from './feedbackProbe';
   import 'katex/dist/katex.min.css';
+  import './desktop-controls.css';
   import './workspace.css';
 
   let { verify }: { verify?: 'initial' | 'restore' | 'attachments' | 'managedWorktree' | 'annotations' | 'composerContext' | 'composerSettings' | 'projectContext' | 'slashCommands' | 'promptRevision' | 'conversationFork' | 'sidebar' | 'sidebarRestore' | 'commandPalette' | 'archive' | 'chatDeletion' | 'messageSearch' | 'automaticTitles' | 'pinnedSummary' | 'inspector' | 'feedback' | 'fileTools' | 'account' | 'settings' | 'appearance' | 'appearanceRestore' | 'appKitImport' | 'notifications' | 'voice' | 'voiceReconnect' | 'voiceNoFallback' | 'voiceHandoff' | 'voiceHistory' | 'voiceHistoryRestore' | 'readAloud' | 'questionDictation' | 'relayHost' | 'relayDevices' | 'windowsSetup' | 'turn' | 'activeTurn' | 'queue' | 'diff' | 'quit' } = $props();

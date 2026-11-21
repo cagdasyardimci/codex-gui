@@ -54,7 +54,7 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
         titleBox.height < 23 || titleBox.height > 25 || titleBox.width < 68 || titleBox.width > 80) {
       throw new Error(`The bundled Settings title did not fit its reference line: ${titleStyle.fontFamily}, ${titleBox.width}×${titleBox.height}`);
     }
-    const search = field('Search Settings')!;
+    const search = field<HTMLInputElement>('Search Settings')!;
     search.value = 'content font size';
     search.dispatchEvent(new Event('input', { bubbles: true }));
     await waitFor('Settings search did not locate the typography control', () =>
@@ -66,13 +66,18 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     if (color() !== 'rgb(255, 255, 255)' || getComputedStyle(document.documentElement).color !== 'rgb(13, 13, 13)') {
       throw new Error('The reference light palette did not reach the installed workspace');
     }
+    search.value = '';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    await waitFor('Settings did not restore the section controls', () => !!dialog()?.querySelector('nav [aria-pressed="true"]'));
+    const lightControls = inspectControls(dialog()!, search);
     const menu = () => field<HTMLSelectElement>('UI Font');
     await waitFor('The system font catalog was empty', () => (menu()?.options.length ?? 0) > 1);
     const families = [...menu()!.options].map(({value}) => value).filter(Boolean);
     const family = ['Arial', 'Liberation Sans', 'DejaVu Sans', 'Segoe UI'].find((candidate) => families.includes(candidate)) ?? families[0]!;
     await change('UI Font', family);
     await waitFor('Content did not inherit the selected UI font', () =>
-      profile()?.fonts.ui === family && visible()?.resolvedFonts.content === family);
+      profile()?.fonts.ui === family && visible()?.resolvedFonts.content === family &&
+      getComputedStyle(search).fontFamily.includes(family));
     await updateDesktopAppearance({selection: visible()!.selection,
       edit: {type: 'setFont', role: 'code', family: 'Codex Fixture Uninstalled Typeface'}});
     await waitFor('An uninstalled font did not fall back while retaining its preference', () =>
@@ -89,6 +94,12 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     await mode('dark');
     if (color() !== 'rgb(17, 17, 17)' || contentPx() !== '15px' || profile()?.fonts.ui !== null) {
       throw new Error('The dark appearance inherited unrelated light preferences');
+    }
+    const darkControls = inspectControls(dialog()!, search);
+    if (lightControls.overlay.background === darkControls.overlay.background ||
+        lightControls.field.color === darkControls.field.color ||
+        lightControls.button.height !== darkControls.button.height) {
+      throw new Error('Shared controls did not adapt their colors while retaining their geometry');
     }
     await change('Theme', 'nord');
     await waitFor('Selecting a preset did not apply its dark palette', () => profile()?.presetId === 'nord');
@@ -115,11 +126,42 @@ export async function verifyAppearance(phase: 'appearance' | 'appearanceRestore'
     await invoke('verify_appearance_result', {
       failure: null,
       evidence: { regular, zoomed: await fixtureState(), settingsTitle: { width: titleBox.width, height: titleBox.height },
-        font: family, background: color(), viewport: [innerWidth, innerHeight] },
+        font: family, background: color(), viewport: [innerWidth, innerHeight],
+        controls: { light: lightControls, dark: darkControls } },
     });
   } catch (error) {
     await invoke('verify_appearance_result', { failure: String(error), evidence: {} });
   }
+}
+
+function inspectControls(overlay: HTMLDialogElement, field: HTMLInputElement) {
+  const button = [...overlay.querySelectorAll<HTMLButtonElement>('header button')]
+    .find((candidate) => candidate.textContent?.trim() === 'Close');
+  const selected = overlay.querySelector<HTMLElement>('nav [aria-pressed="true"]');
+  if (!button || !selected) throw new Error('Settings shared controls did not render');
+  const previous = document.activeElement;
+  const metrics = document.createElement('canvas').getContext('2d');
+  field.focus({ preventScroll: true });
+  const summarize = (element: HTMLElement) => {
+    const bounds = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    if (metrics) metrics.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    return { height: bounds.height, width: bounds.width, font: style.fontFamily, fontSize: style.fontSize,
+      textAdvance: metrics?.measureText('Codex GUI').width,
+      radius: style.borderTopLeftRadius, color: style.color, background: style.backgroundColor,
+      outline: style.outlineWidth, outlineStyle: style.outlineStyle, shadow: style.boxShadow };
+  };
+  const evidence = { field: summarize(field), button: summarize(button), selected: summarize(selected), overlay: summarize(overlay) };
+  if (document.activeElement !== field || evidence.field.outline !== '2px' || evidence.field.outlineStyle !== 'solid') {
+    throw new Error('The focused Settings field lost its visible focus ring');
+  }
+  if (evidence.field.height < 32 || evidence.button.height < 32 || evidence.field.radius !== evidence.button.radius ||
+      evidence.field.font !== evidence.button.font || evidence.field.fontSize !== evidence.button.fontSize ||
+      evidence.overlay.shadow === 'none' || evidence.selected.background === evidence.button.background) {
+    throw new Error('Settings controls lost their shared metrics, elevation, or selected state');
+  }
+  if (previous instanceof HTMLElement) previous.focus({ preventScroll: true });
+  return evidence;
 }
 
 function normalLayout(state: WindowEvidence) {
