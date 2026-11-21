@@ -1,7 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{fs, io, path::PathBuf};
 
 use codex_gui_core::{
-    checkout::CheckoutIdentity,
+    checkout::{CheckoutError, CheckoutIdentity},
     identity::ThreadId,
     ipc::WriteAccess,
     workspace::WorktreeThreadBinding,
@@ -61,8 +61,14 @@ impl Navigation {
             .as_ref()
             .ok_or("missing selected project")?
             .checkout;
-        let root = self.managed_worktree_root()?;
-        if checkout.canonical_path().parent() != Some(root.as_path()) {
+        let root = match CheckoutIdentity::capture(&self.managed_worktree_root()?) {
+            Ok(root) => root,
+            Err(CheckoutError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => {
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if checkout.canonical_path().parent() != Some(root.canonical_path()) {
             return Ok(None);
         }
         let store = WorktreeStore::open(&self.worktree_records)?;
@@ -84,7 +90,7 @@ impl Navigation {
             return Err("the selected checkout has no Tauri worktree authority".into());
         }
         Ok(Some(WorktreeThreadBinding {
-            manager: WorktreeManager::new(store, CheckoutIdentity::capture(&root)?),
+            manager: WorktreeManager::new(store, root),
             record: record.id,
             resume,
         }))

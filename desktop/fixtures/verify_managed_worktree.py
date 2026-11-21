@@ -23,6 +23,9 @@ def main():
         source, profile, home = (root / name for name in ("Source project", "Desktop", "Codex home"))
         for folder in (source, profile, home):
             folder.mkdir()
+        intermediate = root / "Path spelling"
+        intermediate.mkdir()
+        profile_argument = intermediate / ".." / profile.name
         git(source, "init", "--quiet", "--template=")
         git(source, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
             "-c", "commit.gpgSign=false", "commit", "--allow-empty", "--quiet", "-m", "Establish source HEAD")
@@ -34,7 +37,7 @@ def main():
             "CODEX_HOME": str(home), "CODEX_GUI_QA_SCENARIO": "desktop-history",
             "CODEX_GUI_QA_STATE": str(state), "PYTHONIOENCODING": "utf-8",
         }
-        requests = run(app, profile, source, trace, environment)
+        requests = run(app, profile_argument, source, trace, environment)
         (record,) = (profile / "worktrees").glob("*.json")
         workspace = json.loads(record.read_bytes())["workspace"]
         checkout = Path(workspace["checkoutPath"])
@@ -43,7 +46,9 @@ def main():
         (thread,) = [row for row in requests if row["method"] == "thread/start"]
         (turn,) = [row for row in requests if row["method"] == "turn/start"]
         assert Path(thread["params"]["cwd"]).samefile(checkout) and Path(turn["resolvedCwd"]).samefile(checkout)
-        assert turn["params"]["threadId"] == workspace["threadID"] and not list(home.iterdir())
+        bound_thread = workspace.get("threadID")
+        assert bound_thread == turn["params"]["threadId"], "The managed checkout lost its thread binding"
+        assert not list(home.iterdir())
         with closing(sqlite3.connect(profile / "workspace.sqlite3")) as database:
             assert database.execute(
                 "SELECT text FROM drafts WHERE text = 'Keep the original draft in the source checkout.'"
@@ -57,14 +62,14 @@ def main():
         profile.mkdir()
         shutil.copytree(original_profile / "worktrees", profile / "worktrees")
         backend = json.loads(state.read_bytes())
-        (pending,) = [row for row in backend["threads"] if row["id"] == workspace["threadID"]]
+        (pending,) = [row for row in backend["threads"] if row["id"] == bound_thread]
         pending["turns"] = []
         state.write_text(json.dumps(backend), encoding="utf-8")
-        recovered = run(app, profile, checkout, root / "recovery.jsonl", environment)
+        recovered = run(app, profile_argument, checkout, root / "recovery.jsonl", environment)
         assert not any(row["method"] == "thread/start" for row in recovered), recovered
         (resume,) = [row["params"] for row in recovered if row["method"] == "thread/resume"]
         (retry,) = [row["params"] for row in recovered if row["method"] == "turn/start"]
-        assert resume["threadId"] == retry["threadId"] == workspace["threadID"]
+        assert resume["threadId"] == retry["threadId"] == bound_thread
         assert Path(resume["cwd"]).samefile(checkout) and record.read_bytes() == bound
         print("Verified recovery of a managed thread after binding and before draft promotion")
 
